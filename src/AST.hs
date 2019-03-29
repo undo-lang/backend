@@ -2,7 +2,7 @@ data Literal
   = LitStr String
   | LitNum Integer
 
-newtype ModuleName = [Name]
+newtype ModuleName = ModuleName [String]
 data Name
   = QualifiedName ModuleName String
   | UnqualifiedName String
@@ -16,11 +16,11 @@ data Expr
 data Import = Import ModuleName
 data Var = String -- maybe newtype UnqualifiedName?
 
-data Parameter = Parameter String -- ^
-data ParameterList = [Parameter]
+newtype Parameter = Parameter String -- ^
+newtype ParameterList = ParameterList [Parameter]
 data Fn = Fn String ParameterList -- ^
 
 data Decl = ImportDecl Import | VarDecl Var | FnDecl Fn
 
 data Line = LineExpr Expr | LineDecl Decl
-data Block = [Line] -- todo takewhile isDecl + error if contains LineDecl in _2
+data Block = Block [Line] -- todo takewhile isDecl + error if contains LineDecl in _2
