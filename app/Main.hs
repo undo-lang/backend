@@ -7,6 +7,7 @@ main :: IO ()
 main = getArgs >>= runCli
 
 runCompile :: FilePath -> IO ()
+-- TODO Data.ByteString.Lazy.readFile for aeson
 runCompile file = readFile file >>= compile
 
 runCli :: [String] -> IO ()
