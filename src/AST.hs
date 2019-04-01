@@ -52,20 +52,20 @@ data Decl
   = Import ModuleName
   | Var String
   | Fn String ParameterList Block
---instance FromJSON Decl where
---  parseJSON = withObject "decl" $ \o -> do
---    type_ <- o .: "type"
---    case type_ of
---      "Import" -> Import <$> o .: "value" -- TODO check
---      "Var"    -> Var <$> o .: "name"     -- TODO check
---      "Fn"     -> Fn <$> o .: "fn" <*> o .: "parameter" <*> o .: "body" -- TODO check
+instance FromJSON Decl where
+  parseJSON = withObject "decl" $ \o -> do
+    type_ <- o .: "type"
+    case type_ of
+      "Import" -> Import <$> o .: "value" -- TODO check
+      "Var"    -> Var <$> o .: "name"     -- TODO check
+      "Fn"     -> Fn <$> o .: "fn" <*> o .: "parameter" <*> o .: "block"
+      _        -> fail $ "Unknown decl type: " ++ type_
 
 data Line = LineExpr Expr | LineDecl Decl
---instance FromJSON Line where
---  parseJSON = withObject "line" $ \o -> asum [
---      LineExpr <$> parseJSON (Object o)
---      LineDecl <$> parseJSON (Object o)
---    ]
-data Block = Block [Line] -- todo takewhile isDecl + error if contains LineDecl in _2
+instance FromJSON Line where
+  parseJSON = withObject "line" $ \o -> asum [
+      LineExpr <$> parseJSON (Object o),
+      LineDecl <$> parseJSON (Object o)
+    ]
 newtype Block = Block [Line]
   deriving (Generic, FromJSON)
