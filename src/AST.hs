@@ -1,4 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveAnyClass #-}
+-- LANGUAGE BlockArguments
 
 module AST
 --  (
@@ -6,9 +9,12 @@ module AST
 --  )
   where
 
+import GHC.Generics
 import Data.Aeson --(FromJSON(..), (.:), withObject, Object, Object(..))
+import Data.Foldable (asum)
 
 newtype ModuleName = ModuleName [String]
+  deriving (Generic, FromJSON)
 data Name
   = QualifiedName ModuleName String
   | UnqualifiedName String
@@ -38,7 +44,9 @@ instance FromJSON Expr where
       _        -> fail $ "Unknown expr type: " ++ type_
 
 newtype Parameter = Parameter String -- newtype the String?
+  deriving (Generic, FromJSON)
 newtype ParameterList = ParameterList [Parameter]
+  deriving (Generic, FromJSON)
 
 data Decl
   = Import ModuleName
@@ -59,3 +67,5 @@ data Line = LineExpr Expr | LineDecl Decl
 --      LineDecl <$> parseJSON (Object o)
 --    ]
 data Block = Block [Line] -- todo takewhile isDecl + error if contains LineDecl in _2
+newtype Block = Block [Line]
+  deriving (Generic, FromJSON)
