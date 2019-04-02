@@ -2,7 +2,11 @@ module Lib
   ( compile
   ) where
 
---import Data.ByString.Lazy (w)
+import qualified Data.ByteString.Lazy as BS
+import Data.Aeson (eitherDecode)
+import AST (Block)
 
-compile :: String -> IO ()
-compile a = putStrLn a
+compile :: BS.ByteString -> IO ()
+compile contents = putStrLn $ show json
+                        where json :: Either String Block
+                              json = eitherDecode contents

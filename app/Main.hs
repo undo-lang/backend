@@ -2,13 +2,13 @@ module Main where
 
 import Lib (compile)
 import System.Environment (getArgs)
+import qualified Data.ByteString.Lazy as BS
 
 main :: IO ()
 main = getArgs >>= runCli
 
 runCompile :: FilePath -> IO ()
--- TODO Data.ByteString.Lazy.readFile for aeson
-runCompile file = readFile file >>= compile
+runCompile file = BS.readFile file >>= compile
 
 runCli :: [String] -> IO ()
 runCli [file] = do
