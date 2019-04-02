@@ -1,1 +1,19 @@
-{ "body" : [ { "_type" : "Undo::Frontend::AST::Expression::Conditional", "condition" : { "_type" : "Undo::Frontend::AST::Expression::Call", "fn" : { "_type" : "Undo::Frontend::AST::Name::Unqualified", "name" : "bar" }, "argument" : [ { "_type" : "Undo::Frontend::AST::Literal::Num", "value" : 3 }, { "name" : "b", "_type" : "Undo::Frontend::AST::Name::Unqualified" } ] }, "then" : { "_type" : "Undo::Frontend::AST::Block_", "body" : [ { "_type" : "Undo::Frontend::AST::Expression::Call", "fn" : { "_type" : "Undo::Frontend::AST::Name::Unqualified", "name" : "x" }, "argument" : [  ] } ] }, "else" : { "_type" : "Undo::Frontend::AST::Block_", "body" : [ { "fn" : { "name" : "y", "_type" : "Undo::Frontend::AST::Name::Unqualified" }, "_type" : "Undo::Frontend::AST::Expression::Call", "argument" : [  ] } ] } } ], "_type" : "Undo::Frontend::AST::Block_" }
+{
+    "body": [
+        {
+            "argument": [
+                {
+                    "type": "String",
+                    "value": "Hello world!"
+                }
+            ],
+            "fn": {
+                "name": "print",
+                "type": "Unqualified"
+            },
+            "type": "Call"
+        }
+    ],
+    "type": "Block"
+}
+
