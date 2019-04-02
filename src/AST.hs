@@ -15,10 +15,11 @@ import Data.Foldable (asum)
 import Data.Aeson --(FromJSON(..), (.:), withObject, Object, Object(..))
 
 newtype ModuleName = ModuleName [String]
-  deriving (Generic, FromJSON)
+  deriving (Generic, FromJSON, Show)
 data Name
   = QualifiedName ModuleName String
   | UnqualifiedName String
+  deriving (Show)
 
 instance FromJSON Name where
   parseJSON = withObject "name" $ \o -> do
@@ -34,6 +35,7 @@ data Expr
   | CallExpr Expr [Expr]
   | LoopExpr Expr Block
   | ConditionalExpr Expr Block Block
+  deriving (Show)
 
 instance FromJSON Expr where
   parseJSON = withObject "expr" $ \o -> do
@@ -45,14 +47,17 @@ instance FromJSON Expr where
       _        -> fail $ "Unknown expr type: " ++ type_
 
 newtype Parameter = Parameter String -- newtype the String?
-  deriving (Generic, FromJSON)
+  deriving (Generic, FromJSON, Show)
+
 newtype ParameterList = ParameterList [Parameter]
-  deriving (Generic, FromJSON)
+  deriving (Generic, FromJSON, Show)
 
 data Decl
   = Import ModuleName
   | Var String
   | Fn String ParameterList Block
+  deriving (Show)
+
 instance FromJSON Decl where
   parseJSON = withObject "decl" $ \o -> do
     type_ <- o .: "type"
@@ -63,6 +68,8 @@ instance FromJSON Decl where
       _        -> fail $ "Unknown decl type: " ++ type_
 
 data Line = LineExpr Expr | LineDecl Decl
+  deriving (Show)
+
 instance FromJSON Line where
   parseJSON = withObject "line" $ \o -> asum [
       LineExpr <$> parseJSON (Object o),
@@ -70,6 +77,7 @@ instance FromJSON Line where
     ]
 
 newtype Block = Block [Line]
+  deriving (Show)
 
 instance FromJSON Block where
   parseJSON = withObject "block" $ \o -> do
