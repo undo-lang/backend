@@ -10,8 +10,9 @@ module AST
   where
 
 import GHC.Generics
-import Data.Aeson --(FromJSON(..), (.:), withObject, Object, Object(..))
+import Control.Monad (guard)
 import Data.Foldable (asum)
+import Data.Aeson --(FromJSON(..), (.:), withObject, Object, Object(..))
 
 newtype ModuleName = ModuleName [String]
   deriving (Generic, FromJSON)
@@ -25,7 +26,7 @@ instance FromJSON Name where
     case type_ of
       "Unqualified" -> UnqualifiedName <$> o .: "name"
       "Qualified"   -> fail "Unimplemented: qualified names"
-      _            -> fail $ "Unhandled name type: " ++ type_
+      _             -> fail $ "Unhandled name type: " ++ type_
 
 data Expr
   = LitStr String
@@ -67,5 +68,11 @@ instance FromJSON Line where
       LineExpr <$> parseJSON (Object o),
       LineDecl <$> parseJSON (Object o)
     ]
+
 newtype Block = Block [Line]
-  deriving (Generic, FromJSON)
+
+instance FromJSON Block where
+  parseJSON = withObject "block" $ \o -> do
+    type_ <- o .: "type"
+    guard ((type_ :: String) == "Block")
+    Block <$> o .: "body"
