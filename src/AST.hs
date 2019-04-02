@@ -35,16 +35,20 @@ data Expr
   | CallExpr Expr [Expr]
   | LoopExpr Expr Block
   | ConditionalExpr Expr Block Block
+  | NameExpr Name
   deriving (Show)
 
 instance FromJSON Expr where
-  parseJSON = withObject "expr" $ \o -> do
-    type_ <- o .: "type"
-    case type_ of
-      "String" -> LitStr <$> o .: "value"
-      "Num"    -> LitNum <$> o .: "value"
-      "Call"   -> CallExpr <$> o .: "fn" <*> o .: "argument"
-      _        -> fail $ "Unknown expr type: " ++ type_
+  parseJSON = withObject "expr" $ \o -> asum [
+    NameExpr <$> parseJSON (Object o),
+    do
+      type_ <- o .: "type"
+      case type_ of
+        "String" -> LitStr <$> o .: "value"
+        "Num"    -> LitNum <$> o .: "value"
+        "Call"   -> CallExpr <$> o .: "fn" <*> o .: "argument"
+        _        -> fail $ "Unknown expr type: " ++ type_
+    ]
 
 newtype Parameter = Parameter String -- newtype the String?
   deriving (Generic, FromJSON, Show)
