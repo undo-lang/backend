@@ -5,6 +5,7 @@ module Lib
 import qualified Data.ByteString.Lazy as BS
 import Data.Aeson (eitherDecode)
 import Control.Lens (_Left, _Right, set, over)
+import Control.Monad (foldM)
 import Data.Functor (($>))
 import AST
 
@@ -19,29 +20,22 @@ newtype Error = Error String
 readBlock :: BS.ByteString -> Either Error Block
 readBlock = over _Left Error . eitherDecode
 
-traverseAccum :: (a -> b -> Either Error b) -> [a] -> b -> Either Error b
-traverseAccum fn (x:xs) val = fn x val >>= traverseAccum fn xs
-traverseAccum _  []     val = return val
-
-traverseAccumT :: Monoid b => (a -> b -> Either Error b) -> [a] -> Either Error b
-traverseAccumT fn xs = traverseAccum fn xs mempty
-
 -- TODO use Validation instead of Either here
 -- TODO use (Source, String) instead of simply `String`, so we know if it was previously declared as a param or a var
 checkUseBeforeDeclare :: Block -> [String] -> Either Error [String]
-checkUseBeforeDeclare (Block lines) names = traverseAccum check lines names
-  where check :: Line -> [String] -> Either Error [String]
-        check (LineDecl (Var name)) names = checkDupe name names dupeVariable
-        check (LineDecl (Fn name pr block)) names = (extractParamNames pr >>= checkUseBeforeDeclare block . (++ names)) $> names
-        -- XXX we don't check shadowing here, that (++ names possibly has dupes). We can `nub` to remove dupes, or error
-        check (LineDecl _) names = Right names
-        check (LineExpr expr) names = Right names -- TODO basically the opposite of checkDupe
+checkUseBeforeDeclare (Block lines) names = foldM check names lines
+  where check :: [String] -> Line -> Either Error [String]
+        check names (LineDecl (Var name)) = checkDupe name names DuplicateVariable
+        -- XXX  we don't check shadowing here, that (++ names possibly has dupes). We can `nub` to remove dupes, or error
+        check names (LineDecl (Fn name pr block)) = (extractParamNames pr >>= checkUseBeforeDeclare block . (++ names)) $> names
+        check names (LineDecl _) = Right names
+        check names (LineExpr expr) = Right names -- TODO basically the opposite of checkDupe
 
         extractParamNames :: ParameterList -> Either Error [String]
-        extractParamNames (ParameterList params) = traverseAccum extractParamName params []
+        extractParamNames (ParameterList params) = foldM extractParamName [] params
 
-        extractParamName :: Parameter -> [String] -> Either Error [String]
-        extractParamName (Parameter n) xs = checkDupe n xs dupeParam
+        extractParamName :: [String] -> Parameter -> Either Error [String]
+        extractParamName xs (Parameter n) = checkDupe n xs DuplicateParameter
 
         checkDupe :: Eq a => a -> [a] -> (a -> b) -> Either b [a]
         checkDupe x xs lft = rightIf (x `elem` xs) (lft x) (x:xs)
