@@ -14,14 +14,19 @@ compile contents = putStrLn $ show $ do
   block <- readBlock contents
   checkUseBeforeDeclare block []
 
-newtype Error = Error String
+-- XXX should we have different error types depending on where where are in the program?
+data Error
+  = ParseError String
+  | DuplicateVariable String
+  | DuplicateParameter String
   deriving (Show)
 
 readBlock :: BS.ByteString -> Either Error Block
-readBlock = over _Left Error . eitherDecode
+readBlock = over _Left ParseError . eitherDecode
 
 -- TODO use Validation instead of Either here
 -- TODO use (Source, String) instead of simply `String`, so we know if it was previously declared as a param or a var
+-- XXX use `foldM_` here?
 checkUseBeforeDeclare :: Block -> [String] -> Either Error [String]
 checkUseBeforeDeclare (Block lines) names = foldM check names lines
   where check :: [String] -> Line -> Either Error [String]
@@ -39,14 +44,6 @@ checkUseBeforeDeclare (Block lines) names = foldM check names lines
 
         checkDupe :: Eq a => a -> [a] -> (a -> b) -> Either b [a]
         checkDupe x xs lft = rightIf (x `elem` xs) (lft x) (x:xs)
-
--- TODO ctor of Error
-dupeVariable :: String -> Error
-dupeVariable = Error . ("Duplicate variable: " ++)
-
--- TODO ctor of Error
-dupeParam :: String -> Error
-dupeParam = Error . ("Duplicate parameter: " ++)
 
 -- TODO helpers file or w/e
 rightIf :: Bool -> a -> b -> Either a b
