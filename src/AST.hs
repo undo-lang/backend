@@ -4,6 +4,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE GADTs #-}
 -- LANGUAGE BlockArguments
@@ -14,14 +15,19 @@ import GHC.Generics
 import Control.Monad (guard)
 import Data.Foldable (asum)
 import Data.Aeson --(FromJSON(..), (.:), withObject, Object, Object(..))
+import Control.Lens.Prism
+import Control.Lens.Plated
+import Control.Lens.Type -- TMP
 
 newtype ModuleName = ModuleName [String]
-  deriving (Generic, FromJSON, Show)
+  deriving (Generic, FromJSON, Eq, Show)
 
 data NameStage = U | R
 data Name :: NameStage -> * where
   Unresolved :: String -> Name 'U
-  Variable   :: String -> Name 'R
+  Prefixed   :: ModuleName -> String -> Name 'U
+  Local      :: String -> Name 'R
+  Namespaced :: ModuleName -> String -> Name 'R
   -- TODO other names
 deriving instance Show (Name s)
 
@@ -65,6 +71,34 @@ data Decl s
   | Var String
   | Fn String ParameterList (Block s)
   deriving (Show)
+_Import :: Prism' (Decl s) ModuleName
+_Import = prism' Import $ (\case Import m -> Just m
+                                 _        -> Nothing)
+_Var :: Prism' (Decl s) String
+_Var = prism' Var $ (\case Var s -> Just s
+                           _     -> Nothing)
+
+curry3 :: (a -> b -> c -> d) -> (a, b, c) -> d
+curry3 f (a, b, c) = f a b c
+
+_Fn :: Prism' (Decl s) (String, ParameterList, Block s)
+_Fn = prism' (curry3 Fn) $ (\case (Fn s p b) -> Just (s, p, b)
+                                  _          -> Nothing)
+
+--instance Plated (Decl 'R) where
+--  plate f (Fn s p b) = Fn s p <$> plateBlock f b
+--    where plateBlock :: Traversal' (Block s) (Block s)
+--          plateBlock f (Block xs) = Block <$> (plateElem f <$> xs)
+--
+--          plateElem :: Traversal' (Line s) (Line s)
+--          plateElem f (LineDecl d) = LineDecl <$> f d
+--          plateElem f (LineExpr e) = LineExpr <$> plateExpr f e
+--
+--          plateExpr f (CallExpr e xs) = CallExpr <$> plateExpr f e <*> (f <$> xs)
+--          plateExpr f (LoopExpr e b) = LoopExpr <$> plateExpr f e <*> plateBlock f b
+--          plateExpr f (ConditionalExpr c t e) = ConditionalExpr <$> plateExpr f c <*> plateBlock f t <*> plateBlock f e
+--          plateExpr f e = pure e
+--  plate f decl = pure decl
 
 instance FromJSON (Decl 'U) where
   parseJSON = withObject "decl" $ \o -> do

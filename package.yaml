@@ -20,11 +20,13 @@ extra-source-files:
 description:         Please see the README on GitHub at <https://github.com/githubuser/undo-backend#readme>
 
 dependencies:
-- base >= 4.7 && < 5
 - aeson >= 1.4.2 && < 1.5
+- base >= 4.7 && < 5
+- bytestring >= 0.10 && < 0.11
+- containers >= 0.6 && < 0.7
+- mtl >= 2.2.0 && < 2.3
 - lens >= 4.17 && < 5
 # TODO validation
-- bytestring >= 0.10 && < 0.11
 
 library:
   source-dirs: src
