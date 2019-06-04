@@ -85,20 +85,21 @@ _Fn :: Prism' (Decl s) (String, ParameterList, Block s)
 _Fn = prism' (curry3 Fn) $ (\case (Fn s p b) -> Just (s, p, b)
                                   _          -> Nothing)
 
---instance Plated (Decl 'R) where
---  plate f (Fn s p b) = Fn s p <$> plateBlock f b
---    where plateBlock :: Traversal' (Block s) (Block s)
---          plateBlock f (Block xs) = Block <$> (plateElem f <$> xs)
---
---          plateElem :: Traversal' (Line s) (Line s)
---          plateElem f (LineDecl d) = LineDecl <$> f d
---          plateElem f (LineExpr e) = LineExpr <$> plateExpr f e
---
---          plateExpr f (CallExpr e xs) = CallExpr <$> plateExpr f e <*> (f <$> xs)
---          plateExpr f (LoopExpr e b) = LoopExpr <$> plateExpr f e <*> plateBlock f b
---          plateExpr f (ConditionalExpr c t e) = ConditionalExpr <$> plateExpr f c <*> plateBlock f t <*> plateBlock f e
---          plateExpr f e = pure e
---  plate f decl = pure decl
+instance Plated (Decl 'R) where
+  plate f (Fn s p b) = Fn s p <$> plateBlock f b
+    where plateBlock :: Traversal' (Block s) (Decl s)
+          plateBlock f (Block xs) = Block <$> (plateElem f <*> xs)
+
+          plateElem :: Traversal' (Line s) (Decl s)
+          plateElem f (LineDecl d) = LineDecl <$> f d
+          plateElem f (LineExpr e) = LineExpr <$> plateExpr f e
+
+          plateExpr :: Traversal' (Expr s) (Decl s)
+          plateExpr f (CallExpr e xs) = CallExpr <$> plateExpr f e <*> (plateExpr f <$> xs)
+          plateExpr f (LoopExpr e b) = LoopExpr <$> plateExpr f e <*> plateBlock f b
+          plateExpr f (ConditionalExpr c t e) = ConditionalExpr <$> plateExpr f c <*> plateBlock f t <*> plateBlock f e
+          plateExpr _ e = pure e
+  plate f decl = pure decl
 
 instance FromJSON (Decl 'U) where
   parseJSON = withObject "decl" $ \o -> do
