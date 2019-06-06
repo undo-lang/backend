@@ -1,3 +1,4 @@
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE DataKinds #-}
@@ -7,12 +8,9 @@ module Scope
   ) where
 
 import Control.Monad (foldM)
-import Data.List (mapAccumL)
 import qualified Data.Map as Map
-import Data.Functor (($>))
 import Data.Traversable (traverse)
 import Control.Monad.State (StateT(..), evalStateT)
-
 import Control.Lens
 
 import AST
@@ -21,6 +19,8 @@ data ScopeError
   = DuplicateVariable String
   | DuplicateImport ModuleName
   -- | DuplicateParameter String
+  | NoSuchVariable String
+  | NoSuchNamespace ModuleName
   deriving (Show)
 
 type Aliases = Map.Map String ModuleName -- TODO implement those everywhere else
@@ -46,9 +46,14 @@ mapAccumM f = flip (evalStateT . (traverse (StateT . (flip f))))
 resolveRoot :: Block 'U -> Either ScopeError (Block 'R)
 resolveRoot = resolveTree emptyScope
 
-resolveTree :: Scope -> Block 'U -> Either ScopeError (Block 'R)
+type Resolver (s :: NameStage -> *)
+  = Scope -> s 'U -> Either ScopeError (s 'R)
+type ResolverWithScope (s :: NameStage -> *)
+  = Scope -> s 'U -> Either ScopeError (s 'R, Scope)
+
+resolveTree :: Resolver Block
 resolveTree scope (Block lines) = Block <$> mapAccumM resolveLine scope lines
-  where resolveLine :: Scope -> Line 'U -> Either ScopeError (Line 'R, Scope)
+  where resolveLine :: ResolverWithScope Line
         resolveLine scope (LineDecl (Var name)) =
           (LineDecl $ Var name,) <$> declName scope name
 
@@ -61,7 +66,36 @@ resolveTree scope (Block lines) = Block <$> mapAccumM resolveLine scope lines
         resolveLine scope (LineDecl (Import ns)) =
           (LineDecl $ Import ns,) <$> declNs scope ns
 
-        declNs :: Scope -> ModuleName -> Either ScopeError Scope
+        resolveLine scope (LineExpr expr) =
+          (, scope) . LineExpr <$> resolveExpr scope expr
+
+        resolveExpr :: Resolver Expr
+        resolveExpr scope (CallExpr fn args) =
+          CallExpr <$> resolveExpr scope fn <*> (sequence $ resolveExpr scope <$> args)
+
+        resolveExpr scope (LoopExpr cond blk) = -- TODO extract variable decl(s) from `cond`?
+          LoopExpr <$> resolveExpr scope cond <*> resolveTree scope blk
+
+        resolveExpr scope (ConditionalExpr cond then_ else_) = -- TODO extract variable decl(s) from `cond`?
+          ConditionalExpr <$> resolveExpr scope cond <*> resolveTree scope then_ <*> resolveTree scope else_
+
+        resolveExpr scope (NameExpr n) =
+          NameExpr <$> resolveName scope n
+
+        resolveExpr _ (LitStr s) =
+          Right $ LitStr s
+
+        resolveExpr _ (LitNum i) =
+          Right $ LitNum i
+
+        resolveName :: Resolver Name
+        resolveName scope (Unresolved s) =
+          bimap NoSuchVariable Local $ eitherIf (`elem` scope^.names) s
+
+        resolveName scope (Prefixed m s) = -- TODO Aliases
+          bimap NoSuchNamespace (flip Namespaced s) $ eitherIf (`elem` scope^.namespaces) m
+
+        declNs :: Scope -> ModuleName -> Either ScopeError Scope -- TODO if an Alias already exists with that name, error
         declNs scope = bimap DuplicateImport (`addNamespace` scope) . eitherIf (`elem` scope^.namespaces)
 
         declName :: Scope -> String -> Either ScopeError Scope
