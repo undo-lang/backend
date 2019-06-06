@@ -119,6 +119,14 @@ instance FromJSON (Line 'U) where
       LineDecl <$> parseJSON (Object o)
     ]
 
+_LineExpr :: Prism' (Line s) (Expr s)
+_LineExpr = prism' LineExpr $ (\case LineExpr e -> Just e
+                                     _          -> Nothing)
+
+_LineDecl :: Prism' (Line s) (Decl s)
+_LineDecl = prism' LineDecl $ (\case LineDecl e -> Just e
+                                     _          -> Nothing)
+
 newtype Block s = Block [Line s]
   deriving (Show)
 
