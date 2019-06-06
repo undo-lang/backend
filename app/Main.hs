@@ -7,12 +7,12 @@ import qualified Data.ByteString.Lazy as BS
 main :: IO ()
 main = getArgs >>= runCli
 
-runCompile :: FilePath -> IO ()
-runCompile file = BS.readFile file >>= compile
+runCompile :: String -> FilePath -> IO ()
+runCompile name file = BS.readFile file >>= compile name
 
 runCli :: [String] -> IO ()
-runCli [file] = do
+runCli [name, file] = do
   putStrLn $ "You want to read " ++ file
-  runCompile file
+  runCompile name file
   mempty
-runCli _      = putStrLn "You need to specify a file to read!"
+runCli _      = putStrLn "You need to pass `module name` `module AST JSON file`"
