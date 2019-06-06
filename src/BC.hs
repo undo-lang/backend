@@ -1,28 +1,68 @@
 {-# LANGUAGE DataKinds #-}
 module BC where
 
+import Control.Monad (ap)
+import Control.Lens.Combinators (toListOf, _1)
+import Control.Lens.Fold (folded, (^..))
+import Control.Lens.Plated (cosmos)
+import Data.List (nub)
 import qualified Data.Map as Map
-import Control.Lens.Plated
-import AST (ModuleName, Block(..), NameStage(R), Line, Decl(..), _Import)
+
+import AST
+
+data BCError
+ = DuplicateFunctionName String
+ | DuplicateImport ModuleName
+ deriving (Show)
 
 data Instruction
  = PushInt Int
  | PushString String
  | StaticCall String Int
+  deriving (Show)
 
 getImports :: [Decl 'R] -> [ModuleName]
-getImports = undefined --toListOf (traverse . cosmos . _Import)
+getImports = toListOf $ traverse . cosmos . _Import
 
--- TODO Control.Lens.Plated
--- TODO which part should move all top-level declarations to a MAIN-like fn
-compile :: [Decl 'R] -> Module
-compile decls = let (imports, vars, fns) = undefined decls -- split decls
-                 in undefined
+getFunctions :: [Decl 'R] -> Either BCError [(String, ParameterList, Block 'R)]
+getFunctions decls = if ap (==) nub fnNames then Right fns else Left undefined
+  where fns :: [(String, ParameterList, Block 'R)]
+        fns = decls^..folded._Fn
 
--- TODO global strings (function names etc)
+        fnNames :: [String]
+        fnNames = fns^..folded._1
+
+-- TODO we need to pass the name of "globals" here
+compileFn :: (String, ParameterList, Block s) -> (String, [Instruction])
+compileFn (s, param, block) = (s, []) -- TODO
+
+-- Moves Leftover top-level code to a function called Main
+reformatBlock :: Block 'R -> [Decl 'R]
+reformatBlock (Block lines) = (genMain exprs):decls
+  where exprs :: [Expr 'R]
+        exprs = lines^..folded._LineExpr
+
+        decls :: [Decl 'R]
+        decls = lines^..folded._LineDecl
+
+        genMain :: [Expr 'R] -> Decl 'R
+        genMain exprs = Fn "MAIN" (ParameterList []) (Block $ LineExpr <$> exprs)
+
+gen :: String -> Block 'R -> Either BCError Module -- TODO return Either Error
+gen name block = do
+  let decls = reformatBlock block
+  fns <- getFunctions decls
+  let functions = compileFn <$> fns
+  pure Module
+       { name = name
+       , dependencies = getImports decls
+       , functions = Map.fromList functions }
+
+-- TODO global strings (function names etc), probably using Plated+State
 
 data Module = Module -- TODO version?
   { name :: String
-  , dependencies :: [[String]] -- this should include lower-level `Import`s (with a `uniq` at the end)
+  , dependencies :: [ModuleName] -- this should include all `Import`s (dupe imports = error)
   , functions :: Map.Map String [Instruction]
   }
+  deriving (Show)
