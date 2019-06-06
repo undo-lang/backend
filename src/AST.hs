@@ -36,7 +36,7 @@ instance FromJSON (Name 'U) where
     type_ <- o .: "type"
     case type_ of
       "Unqualified" -> Unresolved <$> o .: "name"
-      "Qualified"   -> fail "Unimplemented: qualified names"
+      "Qualified"   -> Prefixed <$> o .: "ns" <*> o .: "name"
       _             -> fail $ "Unhandled name type: " ++ type_
 
 data Expr s
