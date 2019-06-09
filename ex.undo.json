@@ -9,7 +9,8 @@
             ],
             "fn": {
                 "name": "print",
-                "type": "Unqualified"
+		"module": ["Prelude"],
+                "type": "Qualified"
             },
             "type": "Call"
         }

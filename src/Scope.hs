@@ -25,7 +25,7 @@ data ScopeError
 
 type Aliases = Map.Map String ModuleName -- TODO implement those everywhere else
 type Scope = ([String], [ModuleName], Aliases)
-emptyScope = ([], [], Map.empty)
+emptyScope = ([], [ModuleName ["Prelude"]], Map.empty)
 
 names :: Lens' Scope [String]
 names = _1
@@ -40,8 +40,8 @@ addNamespace = (namespaces <>~) . pure
 -- from https://stackoverflow.com/questions/11652809/how-to-implement-mapaccumm
 -- ( like https://hackage.haskell.org/package/Cabal-2.4.1.0/docs/src/Distribution.Utils.MapAccum.html )
 -- note: use runState to keep the accum if needed
-mapAccumM :: (Monad m, Functor m, Traversable t) => (a -> b -> m (c, a)) -> a -> t b -> m (t c)
-mapAccumM f = flip (evalStateT . (traverse (StateT . (flip f))))
+mapAccumM_ :: (Monad m, Functor m, Traversable t) => (a -> b -> m (c, a)) -> a -> t b -> m (t c)
+mapAccumM_ f = flip (evalStateT . (traverse (StateT . (flip f))))
 
 resolveRoot :: Block 'U -> Either ScopeError (Block 'R)
 resolveRoot = resolveTree emptyScope
@@ -52,7 +52,7 @@ type ResolverWithScope (s :: NameStage -> *)
   = Scope -> s 'U -> Either ScopeError (s 'R, Scope)
 
 resolveTree :: Resolver Block
-resolveTree scope (Block lines) = Block <$> mapAccumM resolveLine scope lines
+resolveTree scope (Block lines) = Block <$> mapAccumM_ resolveLine scope lines
   where resolveLine :: ResolverWithScope Line
         resolveLine scope (LineDecl (Var name)) =
           (LineDecl $ Var name,) <$> declName scope name
