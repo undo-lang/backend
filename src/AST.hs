@@ -78,6 +78,7 @@ instance FromJSON (Expr 'U) where
         "String" -> LitStr <$> o .: "value"
         "Num"    -> LitNum <$> o .: "value"
         "Call"   -> CallExpr <$> o .: "fn" <*> o .: "argument"
+        "Conditional" -> ConditionalExpr <$> o .: "cond" <*> o .: "then" <*> o .: "else"
         _        -> fail $ "Unknown expr type: " ++ type_
     ]
 
@@ -122,8 +123,6 @@ instance Plated (Decl 'R) where
           plateExpr f (ConditionalExpr c t e) = ConditionalExpr <$> plateExpr f c <*> plateBlock f t <*> plateBlock f e
           plateExpr _ e = pure e
   plate _ decl = pure decl
-
-tracepre s x = traceShow (s ++ show x) x
 
 instance Plated (Expr s) where
   plate f' e' = plateExpr f' e'

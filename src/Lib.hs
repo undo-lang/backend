@@ -21,8 +21,8 @@ data Error
 
 compile :: String -> BS.ByteString -> IO ()
 compile moduleName contents = putStrLn $ show $ do
-  block <- readBlock contents
-  resolved <- readRoot block
+  block <- traceShowId $ readBlock contents
+  resolved <- traceShowId $ readRoot block
   bc <- genBC moduleName resolved
   pure $ bc
 

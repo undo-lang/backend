@@ -1,0 +1,87 @@
+{
+  "type": "Block",
+  "body": [
+    {
+      "type": "Fn",
+      "fn": "MyMAIN",
+      "parameter": ["f"],
+      "block": {
+        "type": "Block",
+        "body": [
+          {
+            "type": "Var",
+            "name": "g"
+          },
+          {
+            "type": "Var",
+            "name": "h"
+          },
+          {
+            "type": "Conditional",
+            "cond": {
+              "type": "Num",
+              "value": 42
+            },
+            "then":
+            {
+              "type": "Block",
+              "body":
+              [
+                {
+                  "type": "Call",
+                  "fn": {
+                    "name": "print",
+                    "module": ["Prelude"],
+                    "type": "Qualified"
+                  },
+                  "argument": [
+                    {
+                      "type": "String",
+                      "value": "Hello world!"
+                    },
+                    {
+                      "type": "Num",
+                      "value": 42
+                    }
+                  ]
+                }
+              ]
+            },
+            "else":
+            {
+              "type": "Block",
+              "body": [
+                {
+                  "type": "Call",
+                  "fn": {
+                    "type": "Unqualified",
+                    "name": "f"
+                  },
+                  "argument": [
+                    {
+                      "type": "Call",
+                      "fn": {
+                        "type": "Unqualified",
+                        "name": "g"
+                      },
+                      "argument": [
+                        {
+                          "type": "Call",
+                          "fn": {
+                            "type": "Unqualified",
+                            "name": "h"
+                          },
+                          "argument": []
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

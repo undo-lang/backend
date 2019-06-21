@@ -5,6 +5,7 @@
 module Scope
   ( resolveRoot
   , ScopeError
+  , extractParams
   ) where
 
 import Control.Monad (foldM)
@@ -12,6 +13,7 @@ import qualified Data.Map as Map
 import Data.Traversable (traverse)
 import Control.Monad.State (StateT(..), evalStateT)
 import Control.Lens
+import Debug.Trace
 
 import AST
 
@@ -96,16 +98,19 @@ resolveTree scope (Block lines) = Block <$> mapAccumM_ resolveLine scope lines
           bimap NoSuchNamespace (flip Namespaced s) $ eitherIf (`elem` scope^.namespaces) m
 
         declNs :: Scope -> ModuleName -> Either ScopeError Scope -- TODO if an Alias already exists with that name, error
-        declNs scope = bimap DuplicateImport (`addNamespace` scope) . eitherIf (`elem` scope^.namespaces)
+        declNs scope = bimap DuplicateImport (`addNamespace` scope) . eitherUnless (`elem` scope^.namespaces)
 
         declName :: Scope -> String -> Either ScopeError Scope
-        declName scope = bimap DuplicateVariable (`addName` scope) . eitherIf (`elem` scope^.names)
+        declName scope = bimap DuplicateVariable (`addName` scope) . eitherUnless (`elem` scope^.names)
 
         declNames :: Scope -> [String] -> Either ScopeError Scope
         declNames scope names = foldM declName scope names
 
 eitherIf :: (a -> Bool) -> a -> Either a a
 eitherIf comp a = if comp a then Right a else Left a
+
+eitherUnless :: (a -> Bool) -> a -> Either a a
+eitherUnless comp a = if comp a then Left a else Right a
 
 extractParams :: ParameterList -> [String]
 extractParams (ParameterList params) = unParameter <$> params
