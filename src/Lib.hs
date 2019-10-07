@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 module Lib
   ( compile
+  , Error
   ) where
 
 import qualified Data.ByteString.Lazy as BS
@@ -8,6 +9,7 @@ import qualified Data.ByteString.Lazy as BS
 import Debug.Trace
 import Control.Lens (_Left, _Right, set, over)
 import Data.Aeson (eitherDecode)
+import Data.List.Split (splitOn)
 
 import AST
 import Scope (resolveRoot, ScopeError)
@@ -19,12 +21,13 @@ data Error
   | BytecodeError BCError
   deriving (Show)
 
-compile :: String -> BS.ByteString -> IO ()
-compile moduleName contents = putStrLn $ show $ do
+compile :: String -> BS.ByteString -> Either Error Module
+compile rawModuleName contents = do
+  let moduleName = ModuleName $ splitOn " " rawModuleName
   block <- traceShowId $ readBlock contents
   resolved <- traceShowId $ readRoot block
   bc <- genBC moduleName resolved
-  pure $ bc
+  pure bc
 
 readBlock :: BS.ByteString -> Either Error (Block 'U)
 readBlock = over _Left ParseError . eitherDecode
@@ -32,5 +35,5 @@ readBlock = over _Left ParseError . eitherDecode
 readRoot :: Block 'U -> Either Error (Block 'R)
 readRoot = over _Left ScopingError . resolveRoot
 
-genBC :: String -> Block 'R -> Either Error Module
+genBC :: ModuleName -> Block 'R -> Either Error Module
 genBC moduleName block = over _Left BytecodeError $ gen moduleName block

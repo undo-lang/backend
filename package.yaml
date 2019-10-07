@@ -26,6 +26,7 @@ dependencies:
 - containers >= 0.6 && < 0.7
 - mtl >= 2.2.0 && < 2.3
 - lens >= 4.17 && < 5
+- split >= 0.2.3.3 && < 1
 # TODO validation
 
 library:

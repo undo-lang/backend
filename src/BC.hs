@@ -3,7 +3,11 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DataKinds #-}
-module BC where
+module BC
+    ( gen
+    , Module
+    , BCError
+    ) where
 
 --import Control.Monad.State (StateT(..), runStateT)
 import GHC.Generics
@@ -32,6 +36,7 @@ data Instruction
  | Call Int
  | JumpIfFalse Int -- how many to jump
  | LoadLocal Int
+ | LoadName ModuleName String
   deriving (Show, Generic, ToJSON)
 
 type BcFn = (String, ParameterList, Block 'R)
@@ -78,8 +83,8 @@ compileFn strings (s, params, blk) = (s, compileBlock (extractParams params) blk
         compileExpr locals (NameExpr (Local s)) = case (s `elemIndex` locals) of
           Just idx -> [LoadLocal idx]
           Nothing -> error ("ICE: No such local: '" ++ s ++ "', locals = " ++ show locals ++ ". Btw, globals are NYI.")
-        compileExpr _ (NameExpr (Namespaced _ _)) =
-          [LoadLocal 9999] -- TODO define instr
+        compileExpr _ (NameExpr (Namespaced ns name)) =
+          [LoadName ns name]
 
 -- Moves Leftover top-level code to a function called Main
 reformatBlock :: Block 'R -> [Decl 'R]
@@ -103,7 +108,7 @@ getStrs (s, _, (Block lines)) = [s] ++ litStrs exprs ++ names exprs
 
         names = toListOf $ traverse . cosmos . _NameExpr . _Local
 
-gen :: String -> Block 'R -> Either BCError Module
+gen :: ModuleName -> Block 'R -> Either BCError Module
 gen name block = do
   let decls = reformatBlock block
   let fns = getFunctions decls
@@ -117,9 +122,9 @@ gen name block = do
        , strings = strings }
 
 data Module = Module -- TODO version?
-  { name :: String
+  { name :: ModuleName
   , dependencies :: [ModuleName] -- this should include all `Import`s (dupe imports = error)
   , functions :: Map.Map String [Instruction]
   , strings :: StringTable
   }
-  deriving (Show)
+  deriving (Show, Generic, ToJSON)

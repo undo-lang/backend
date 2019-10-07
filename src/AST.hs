@@ -1,8 +1,8 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE KindSignatures #-}
@@ -22,7 +22,7 @@ import Control.Lens.Plated
 import Control.Lens.Type -- TMP
 
 newtype ModuleName = ModuleName [String]
-  deriving (Generic, FromJSON, Eq, Show)
+  deriving (Generic, FromJSON, ToJSON, Eq, Show)
 
 data NameStage = U | R
 data Name :: NameStage -> * where
