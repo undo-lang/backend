@@ -27,7 +27,7 @@ data ScopeError
 
 type Aliases = Map.Map String ModuleName -- TODO implement those everywhere else
 type Scope = ([String], [ModuleName], Aliases)
-emptyScope = ([], [ModuleName ["Prelude"]], Map.empty)
+emptyScope = (["MAIN"], [ModuleName ["Prelude"]], Map.empty)
 
 names :: Lens' Scope [String]
 names = _1
@@ -37,6 +37,7 @@ aliases :: Lens' Scope Aliases
 aliases = _3
 
 addName = (names <>~) . pure
+addNames = (names <>~)
 addNamespace = (namespaces <>~) . pure
 
 -- from https://stackoverflow.com/questions/11652809/how-to-implement-mapaccumm
@@ -46,7 +47,7 @@ mapAccumM_ :: (Monad m, Functor m, Traversable t) => (a -> b -> m (c, a)) -> a -
 mapAccumM_ f = flip (evalStateT . (traverse (StateT . (flip f))))
 
 resolveRoot :: Block 'U -> Either ScopeError (Block 'R)
-resolveRoot = resolveTree emptyScope
+resolveRoot = resolveTree emptyScope -- XXX should probably make sure we don't shadow functions... should it?
 
 type Resolver (s :: NameStage -> *)
   = Scope -> s 'U -> Either ScopeError (s 'R)
@@ -55,7 +56,12 @@ type ResolverWithScope (s :: NameStage -> *)
 
 resolveTree :: Resolver Block
 resolveTree scope (Block lines) = Block <$> mapAccumM_ resolveLine scope lines
-  where resolveLine :: ResolverWithScope Line
+  where topLevelFunctions :: [String]
+        topLevelFunctions = lines^..folded._LineDecl._Fn._1
+
+        hoistedScope = topLevelFunctions `addNames` scope
+
+        resolveLine :: ResolverWithScope Line
         resolveLine scope (LineDecl (Var name)) =
           (LineDecl $ Var name,) <$> declName scope name
 
@@ -92,7 +98,7 @@ resolveTree scope (Block lines) = Block <$> mapAccumM_ resolveLine scope lines
 
         resolveName :: Resolver Name
         resolveName scope (Unresolved s) =
-          bimap NoSuchVariable Local $ eitherIf (`elem` scope^.names) s
+          bimap NoSuchVariable Local $ eitherIf (`elem` topLevelFunctions ++ scope^.names) s
 
         resolveName scope (Prefixed m s) = -- TODO Aliases
           bimap NoSuchNamespace (flip Namespaced s) $ eitherIf (`elem` scope^.namespaces) m

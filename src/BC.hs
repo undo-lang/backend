@@ -36,6 +36,7 @@ data Instruction
  | Call Int
  | JumpIfFalse Int -- how many to jump
  | LoadLocal Int
+ | LoadGlobal String
  | LoadName ModuleName String
   deriving (Show, Generic, ToJSON)
 
@@ -50,17 +51,19 @@ getFunctions decls = decls^..folded._Fn
 type StringTable = [String]
 
 compileFns :: StringTable -> [BcFn] -> Map.Map String [Instruction]
-compileFns strings fns = Map.fromList $ compileFn strings <$> fns
+compileFns strings fns = Map.fromList $ compileFn strings fnNames <$> fns
+  where fnNames :: [String]
+        fnNames = (\(n, _, _) -> n) <$> fns
 
 -- TODO we need to pass the name of "globals" here
-compileFn :: StringTable -> BcFn -> (String, [Instruction])
-compileFn strings (s, params, blk) = (s, compileBlock (extractParams params) blk)
+compileFn :: StringTable -> [String] -> BcFn -> (String, [Instruction])
+compileFn strings fnNames (s, params, blk) = (s, compileBlock (extractParams params) blk)
   where compileBlock :: [String] -> Block 'R -> [Instruction]
         compileBlock prevLocals (Block lines) =
           -- Locals are append-only. Much like a "stack of variables", if we leave a function with 5 globals, we keep them there until later. This can be dangerous though: { {var a; a = 1} {var b; print b;}} = ??
           -- TODO generate `Store LocalIdx, null` for all the new variables, range (#prevLocals..#prevLocals + #locals]
-          --      or find a better way
-          let locals = prevLocals ++ (traceShow (lines) $ lines^..folded._LineDecl._Var)
+          --      or find a better way (also make sure we dont for args)
+          let locals = prevLocals ++ (lines^..folded._LineDecl._Var)
            in concat $ compileExpr locals <$> lines^..folded._LineExpr
 
         compileExpr :: [String] -> Expr 'R -> [Instruction]
@@ -80,9 +83,10 @@ compileFn strings (s, params, blk) = (s, compileBlock (extractParams params) blk
               elseInstrs = compileBlock locals else_
               jmpToElse = [JumpIfFalse $ length thenInstrs]
           in condInstrs++jmpToElse++thenInstrs++elseInstrs
-        compileExpr locals (NameExpr (Local s)) = case (s `elemIndex` locals) of
-          Just idx -> [LoadLocal idx]
-          Nothing -> error ("ICE: No such local: '" ++ s ++ "', locals = " ++ show locals ++ ". Btw, globals are NYI.")
+        compileExpr locals (NameExpr (Local s)) = case ((s `elemIndex` locals), (s `elemIndex` fnNames)) of
+          (Just idx, _) -> [LoadLocal idx]
+          (Nothing, Just _) -> [LoadGlobal s]
+          (Nothing, Nothing) -> error ("ICE: No such local: '" ++ s ++ "', locals = " ++ show locals ++ ". Btw, globals vars are NYI, only global fns.")
         compileExpr _ (NameExpr (Namespaced ns name)) =
           [LoadName ns name]
 

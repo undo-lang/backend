@@ -2,6 +2,14 @@
   "type": "Block",
   "body": [
     {
+      "type": "Call",
+      "fn": {
+        "name": "MyMAIN",
+        "type": "Unqualified"
+      },
+      "argument": []
+    },
+    {
       "type": "Fn",
       "fn": "MyMAIN",
       "parameter": ["f"],
