@@ -35,6 +35,7 @@ data Instruction
  | PushString Int
  | Call Int
  | JumpIfFalse Int -- how many to jump
+ | Jump Int
  | LoadLocal Int
  | LoadGlobal String
  | LoadName ModuleName String
@@ -74,8 +75,12 @@ compileFn strings fnNames (s, params, blk) = (s, compileBlock (extractParams par
           [PushInt n]
         compileExpr locals (CallExpr f xs) =
           (concat $ compileExpr locals <$> xs) ++ (compileExpr locals f) ++ [Call $ length xs]
+        -- COND: DoCond; JumpIfFalse $END; DoBody; Jmp $COND; END: [...]
         compileExpr locals (LoopExpr cond blk) =
-          []
+          let condInstrs = compileExpr locals cond
+              bodyInstrs = compileBlock locals blk
+              condBody = condInstrs++[JumpIfFalse $ 1 + length condInstrs + length bodyInstrs] -- 1 for the "jump back to cond"
+          in condBody++bodyInstrs++[Jump $ negate $ length condBody + length bodyInstrs]
         -- DoCond; JumpIfFalse $ELSE; DoThen; Jmp $OUT; ELSE: DoElse; OUT: [...]
         compileExpr locals (ConditionalExpr cond then_ else_) =
           let condInstrs = compileExpr locals cond
