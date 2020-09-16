@@ -3,6 +3,9 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts #-}
 module BC
     ( gen
     , Module
@@ -12,12 +15,14 @@ module BC
 --import Control.Monad.State (StateT(..), runStateT)
 import GHC.Generics
 import Debug.Trace
-import Control.Lens ((^.))
+import Control.Lens ((^.), Lens', lens, (<<+~), (<>~), (<<+=), (<>=), at, (?~), (%=), uses)
 import Control.Lens.Combinators (toListOf, over,  _1, _2, _3)
 import Control.Lens.Fold (folded, (^..))
 import Control.Lens.Plated (cosmos, children, universe, plate)
 import Control.Lens.Wrapped
+import Data.Foldable (traverse_)
 import Data.Aeson
+import Control.Monad.State
 import Data.List (nub, mapAccumL, elemIndex)
 import qualified Data.Map as Map
 
@@ -30,16 +35,28 @@ data BCError
  | DuplicateFunctioNames
  deriving (Show)
 
-data Instruction
+newtype LabelIdx = LabelIdx Int
+  deriving (Show, Generic, Eq, Ord)
+deriving instance ToJSON LabelIdx
+data JumpStage = L | O -- Label / Offset
+data JumpData :: JumpStage -> * where
+  Label :: LabelIdx -> JumpData 'L
+  Offset :: Int -> JumpData 'O
+deriving instance Show (JumpData s)
+instance ToJSON (JumpData s) where
+  toJSON (Offset x) = object [ "offset" .= x ]
+
+data Instruction s
  = PushInt Int
  | PushString Int
  | Call Int
- | JumpIfFalse Int -- how many to jump
- | Jump Int
+ | Unless (JumpData s)
+ | Jump (JumpData s)
  | LoadLocal Int
  | LoadGlobal String
  | LoadName ModuleName String
-  deriving (Show, Generic, ToJSON)
+  deriving (Show, Generic)
+deriving instance ToJSON (Instruction s) -- ???
 
 type BcFn = (String, ParameterList, Block 'R)
 
@@ -49,17 +66,67 @@ getImports = toListOf $ traverse . cosmos . _Import
 getFunctions :: [Decl 'R] -> [BcFn]
 getFunctions decls = decls^..folded._Fn
 
-type StringTable = [String]
+type StringTable = [String] 
 
-compileFns :: StringTable -> [BcFn] -> Map.Map String [Instruction]
+type LabelMap = Map.Map LabelIdx Int
+data Builder = Builder
+  { lastLabel :: Int
+  , instrs :: [Instruction 'L]
+  , resolvedLabels :: LabelMap
+  }
+emptyBuilder = Builder { lastLabel = 0, instrs = [] }
+
+_lastLabel :: Lens' Builder Int
+_lastLabel = lens lastLabel (\s a -> s { lastLabel = a })
+
+_instrs :: Lens' Builder [Instruction 'L]
+_instrs = lens instrs (\s a -> s { instrs = a })
+
+_resolvedLabels :: Lens' Builder LabelMap
+_resolvedLabels = lens resolvedLabels (\s a -> s { resolvedLabels = a })
+
+generateLabel :: MonadState Builder m => m Int
+generateLabel = _lastLabel <<+= 1
+
+appendInstr :: MonadState Builder m => Instruction 'L -> m ()
+appendInstr = (_instrs <>=) . pure
+
+--resolveLabel :: MonadState Builder m => LabelIdx -> m ()
+resolveLabel labelIdx = do i <- uses _instrs length
+                           _resolvedLabels %= (at labelIdx ?~ i)
+--resolveLabel labelIdx = do instrs <- _instrs
+--                           at labelIdx ?~ length (instrs.instrs)
+
+type BuilderState = State Builder ()
+
+compileFn'' :: StringTable -> BcFn -> Builder
+compileFn'' strings (s, params, blk) = execState (compileBlock blk) emptyBuilder
+  where compileBlock :: Block 'R -> BuilderState
+        compileBlock (Block lines) = traverse_ compileLine lines
+
+        compileLine :: Line 'R -> BuilderState
+        compileLine line = do labelIdx <- generateLabel
+                              let label = Label $ LabelIdx labelIdx
+                              appendInstr $ Jump label
+
+-- compileFn' :: StringTable -> BcFn -> Builder
+-- compileFn' strings (s, params, blk) = compileBlock emptyBuilder blk
+--   where compileBlock :: Builder -> Block 'R -> Builder 
+--         compileBlock builder (Block lines) = foldl compileLine builder lines
+-- 
+--         compileLine :: Builder -> Line 'R -> Builder
+--         compileLine s _ = let (idx, newS) =  generateLabel s
+--                           in appendInstr (Jump $ Label $ LabelIdx idx) newS
+
+compileFns :: StringTable -> [BcFn] -> Map.Map String [Instruction 'O]
 compileFns strings fns = Map.fromList $ compileFn strings fnNames <$> fns
   where fnNames :: [String]
         fnNames = (\(n, _, _) -> n) <$> fns
 
 -- TODO we need to pass the name of "globals" here
-compileFn :: StringTable -> [String] -> BcFn -> (String, [Instruction])
+compileFn :: StringTable -> [String] -> BcFn -> (String, [Instruction 'O])
 compileFn strings fnNames (s, params, blk) = (s, compileBlock (extractParams params) blk)
-  where compileBlock :: [String] -> Block 'R -> [Instruction]
+  where compileBlock :: [String] -> Block 'R -> [Instruction 'O]
         compileBlock prevLocals (Block lines) =
           -- Locals are append-only. Much like a "stack of variables", if we leave a function with 5 globals, we keep them there until later. This can be dangerous though: { {var a; a = 1} {var b; print b;}} = ??
           -- TODO generate `Store LocalIdx, null` for all the new variables, range (#prevLocals..#prevLocals + #locals]
@@ -67,7 +134,7 @@ compileFn strings fnNames (s, params, blk) = (s, compileBlock (extractParams par
           let locals = prevLocals ++ (lines^..folded._LineDecl._Var)
            in concat $ compileExpr locals <$> lines^..folded._LineExpr
 
-        compileExpr :: [String] -> Expr 'R -> [Instruction]
+        compileExpr :: [String] -> Expr 'R -> [Instruction 'O]
         compileExpr locals (LitStr s) = case (s `elemIndex` strings) of
           Just idx -> [PushString idx]
           Nothing -> error ("ICE: String not found in table: " ++ s)
@@ -79,14 +146,14 @@ compileFn strings fnNames (s, params, blk) = (s, compileBlock (extractParams par
         compileExpr locals (LoopExpr cond blk) =
           let condInstrs = compileExpr locals cond
               bodyInstrs = compileBlock locals blk
-              condBody = condInstrs++[JumpIfFalse $ 1 + length condInstrs + length bodyInstrs] -- 1 for the "jump back to cond"
-          in condBody++bodyInstrs++[Jump $ negate $ length condBody + length bodyInstrs]
+              condBody = condInstrs --OLD ++[JumpIfFalse $ 1 + length condInstrs + length bodyInstrs] -- 1 for the "jump back to cond"
+          in condBody++bodyInstrs --OLD ++[Jump $ negate $ length condBody + length bodyInstrs]
         -- DoCond; JumpIfFalse $ELSE; DoThen; Jmp $OUT; ELSE: DoElse; OUT: [...]
         compileExpr locals (ConditionalExpr cond then_ else_) =
           let condInstrs = compileExpr locals cond
-              thenInstrs = (compileBlock locals then_)++[JumpIfFalse $ length elseInstrs]
+              thenInstrs = (compileBlock locals then_) --OLD ++[JumpIfFalse $ length elseInstrs]
               elseInstrs = compileBlock locals else_
-              jmpToElse = [JumpIfFalse $ length thenInstrs]
+              jmpToElse = [] --OLD [JumpIfFalse $ length thenInstrs]
           in condInstrs++jmpToElse++thenInstrs++elseInstrs
         compileExpr locals (NameExpr (Local s)) = case ((s `elemIndex` locals), (s `elemIndex` fnNames)) of
           (Just idx, _) -> [LoadLocal idx]
@@ -133,7 +200,7 @@ gen name block = do
 data Module = Module -- TODO version?
   { name :: ModuleName
   , dependencies :: [ModuleName] -- this should include all `Import`s (dupe imports = error)
-  , functions :: Map.Map String [Instruction]
+  , functions :: Map.Map String [Instruction 'O]
   , strings :: StringTable
   }
   deriving (Show, Generic, ToJSON)

@@ -11,7 +11,7 @@ module Scope
 import Control.Monad (foldM)
 import qualified Data.Map as Map
 import Data.Traversable (traverse)
-import Control.Monad.State (StateT(..), evalStateT)
+import Control.Monad.State (StateT(..), evalStateT, runStateT)
 import Control.Lens
 import Debug.Trace
 
