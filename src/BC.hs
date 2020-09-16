@@ -102,12 +102,17 @@ type BuilderState = State Builder ()
 compileFn'' :: StringTable -> BcFn -> Builder
 compileFn'' strings (s, params, blk) = execState (compileBlock blk) emptyBuilder
   where compileBlock :: Block 'R -> BuilderState
-        compileBlock (Block lines) = traverse_ compileLine lines
+        compileBlock (Block lines) = traverse_ compileExpr $ lines^..folded._LineExpr
 
-        compileLine :: Line 'R -> BuilderState
-        compileLine line = do labelIdx <- generateLabel
+        compileExpr :: Expr 'R -> BuilderState
+        compileExpr expr = do labelIdx <- generateLabel
                               let label = Label $ LabelIdx labelIdx
                               appendInstr $ Jump label
+
+        --compileLine :: Line 'R -> BuilderState
+        --compileLine line = do labelIdx <- generateLabel
+        --                      let label = Label $ LabelIdx labelIdx
+        --                      appendInstr $ Jump label
 
 -- compileFn' :: StringTable -> BcFn -> Builder
 -- compileFn' strings (s, params, blk) = compileBlock emptyBuilder blk
