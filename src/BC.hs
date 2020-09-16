@@ -97,6 +97,8 @@ resolveLabel labelIdx = do i <- uses _instrs length
 --resolveLabel labelIdx = do instrs <- _instrs
 --                           at labelIdx ?~ length (instrs.instrs)
 
+makeLabel = Label . LabelIdx
+
 type BuilderState = State Builder ()
 
 compileFn'' :: StringTable -> BcFn -> Builder
@@ -105,9 +107,41 @@ compileFn'' strings (s, params, blk) = execState (compileBlock blk) emptyBuilder
         compileBlock (Block lines) = traverse_ compileExpr $ lines^..folded._LineExpr
 
         compileExpr :: Expr 'R -> BuilderState
-        compileExpr expr = do labelIdx <- generateLabel
-                              let label = Label $ LabelIdx labelIdx
-                              appendInstr $ Jump label
+        compileExpr (LitStr s) = case (s `elemIndex`) strings of
+          Just idx -> appendInstr $ PushString idx
+          Nothing -> error $ "ICE: String not found in table: " ++ s
+        compileExpr (LitNum n) =
+          appendInstr $ PushInt n
+        compileExpr (CallExpr f xs) = do
+          traverse_ compileExpr xs
+          compileExpr f
+          appendInstr $ Call $ length xs
+        compileExpr (ConditionalExpr cond then_ else_) = do
+          endLabel <- generateLabel
+          elseLabel <- generateLabel
+          compileExpr cond
+          appendInstr $ Unless $ makeLabel elseLabel
+          compileBlock then_
+          appendInstr $ Jump $ makeLabel endLabel
+          resolveLabel $ LabelIdx $ elseLabel -- TODO not this whole LabelIdx dance
+          compileBlock else_
+          resolveLabel $ LabelIdx $ endLabel
+        compileExpr (LoopExpr cond blk) = do
+          -- TODO break etc, endLabel + some kind of stack of "break; points"
+          startLabel <- generateLabel
+          endLabel <- generateLabel
+          resolveLabel $ LabelIdx startLabel
+          compileExpr cond
+          appendInstr $ Unless $ makeLabel endLabel
+          compileBlock blk
+          appendInstr $ Jump $ makeLabel startLabel
+          resolveLabel $ LabelIdx endLabel
+        compileExpr (NameExpr (Local name)) = error "NYI"
+        compileExpr (NameExpr (Namespaced ns name)) = error "NYI"
+
+        compileExpr _ = do labelIdx <- generateLabel
+                           let label = Label $ LabelIdx labelIdx
+                           appendInstr $ Jump label
 
         --compileLine :: Line 'R -> BuilderState
         --compileLine line = do labelIdx <- generateLabel
@@ -124,48 +158,9 @@ compileFn'' strings (s, params, blk) = execState (compileBlock blk) emptyBuilder
 --                           in appendInstr (Jump $ Label $ LabelIdx idx) newS
 
 compileFns :: StringTable -> [BcFn] -> Map.Map String [Instruction 'O]
-compileFns strings fns = Map.fromList $ compileFn strings fnNames <$> fns
+compileFns strings fns = Map.fromList []
   where fnNames :: [String]
         fnNames = (\(n, _, _) -> n) <$> fns
-
--- TODO we need to pass the name of "globals" here
-compileFn :: StringTable -> [String] -> BcFn -> (String, [Instruction 'O])
-compileFn strings fnNames (s, params, blk) = (s, compileBlock (extractParams params) blk)
-  where compileBlock :: [String] -> Block 'R -> [Instruction 'O]
-        compileBlock prevLocals (Block lines) =
-          -- Locals are append-only. Much like a "stack of variables", if we leave a function with 5 globals, we keep them there until later. This can be dangerous though: { {var a; a = 1} {var b; print b;}} = ??
-          -- TODO generate `Store LocalIdx, null` for all the new variables, range (#prevLocals..#prevLocals + #locals]
-          --      or find a better way (also make sure we dont for args)
-          let locals = prevLocals ++ (lines^..folded._LineDecl._Var)
-           in concat $ compileExpr locals <$> lines^..folded._LineExpr
-
-        compileExpr :: [String] -> Expr 'R -> [Instruction 'O]
-        compileExpr locals (LitStr s) = case (s `elemIndex` strings) of
-          Just idx -> [PushString idx]
-          Nothing -> error ("ICE: String not found in table: " ++ s)
-        compileExpr locals (LitNum n) =
-          [PushInt n]
-        compileExpr locals (CallExpr f xs) =
-          (concat $ compileExpr locals <$> xs) ++ (compileExpr locals f) ++ [Call $ length xs]
-        -- COND: DoCond; JumpIfFalse $END; DoBody; Jmp $COND; END: [...]
-        compileExpr locals (LoopExpr cond blk) =
-          let condInstrs = compileExpr locals cond
-              bodyInstrs = compileBlock locals blk
-              condBody = condInstrs --OLD ++[JumpIfFalse $ 1 + length condInstrs + length bodyInstrs] -- 1 for the "jump back to cond"
-          in condBody++bodyInstrs --OLD ++[Jump $ negate $ length condBody + length bodyInstrs]
-        -- DoCond; JumpIfFalse $ELSE; DoThen; Jmp $OUT; ELSE: DoElse; OUT: [...]
-        compileExpr locals (ConditionalExpr cond then_ else_) =
-          let condInstrs = compileExpr locals cond
-              thenInstrs = (compileBlock locals then_) --OLD ++[JumpIfFalse $ length elseInstrs]
-              elseInstrs = compileBlock locals else_
-              jmpToElse = [] --OLD [JumpIfFalse $ length thenInstrs]
-          in condInstrs++jmpToElse++thenInstrs++elseInstrs
-        compileExpr locals (NameExpr (Local s)) = case ((s `elemIndex` locals), (s `elemIndex` fnNames)) of
-          (Just idx, _) -> [LoadLocal idx]
-          (Nothing, Just _) -> [LoadGlobal s]
-          (Nothing, Nothing) -> error ("ICE: No such local: '" ++ s ++ "', locals = " ++ show locals ++ ". Btw, globals vars are NYI, only global fns.")
-        compileExpr _ (NameExpr (Namespaced ns name)) =
-          [LoadName ns name]
 
 -- Moves Leftover top-level code to a function called Main
 reformatBlock :: Block 'R -> [Decl 'R]
