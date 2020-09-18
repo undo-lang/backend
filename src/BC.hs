@@ -50,7 +50,7 @@ data Instruction s
  = PushInt Int
  | PushString Int
  | Call Int
- | Unless (JumpData s)
+ | JumpUnless (JumpData s)
  | Jump (JumpData s)
  | LoadLocal Int
  | LoadGlobal String
@@ -85,8 +85,8 @@ _instrs = lens instrs (\s a -> s { instrs = a })
 _resolvedLabels :: Lens' Builder LabelMap
 _resolvedLabels = lens resolvedLabels (\s a -> s { resolvedLabels = a })
 
-generateLabel :: MonadState Builder m => m Int
-generateLabel = _lastLabel <<+= 1
+generateLabel :: MonadState Builder m => m LabelIdx
+generateLabel = LabelIdx <$> (_lastLabel <<+= 1)
 
 appendInstr :: MonadState Builder m => Instruction 'L -> m ()
 appendInstr = (_instrs <>=) . pure
@@ -97,7 +97,8 @@ resolveLabel labelIdx = do i <- uses _instrs length
 --resolveLabel labelIdx = do instrs <- _instrs
 --                           at labelIdx ?~ length (instrs.instrs)
 
-makeLabel = Label . LabelIdx
+jump = Jump . Label
+jumpUnless = JumpUnless . Label
 
 type BuilderState = State Builder ()
 
@@ -120,28 +121,26 @@ compileFn'' strings (s, params, blk) = execState (compileBlock blk) emptyBuilder
           endLabel <- generateLabel
           elseLabel <- generateLabel
           compileExpr cond
-          appendInstr $ Unless $ makeLabel elseLabel
+          appendInstr $ jumpUnless elseLabel
           compileBlock then_
-          appendInstr $ Jump $ makeLabel endLabel
-          resolveLabel $ LabelIdx $ elseLabel -- TODO not this whole LabelIdx dance
+          appendInstr $ jump endLabel
+          resolveLabel $ elseLabel
           compileBlock else_
-          resolveLabel $ LabelIdx $ endLabel
+          resolveLabel $ endLabel
         compileExpr (LoopExpr cond blk) = do
           -- TODO break etc, endLabel + some kind of stack of "break; points"
           startLabel <- generateLabel
           endLabel <- generateLabel
-          resolveLabel $ LabelIdx startLabel
+          resolveLabel startLabel
           compileExpr cond
-          appendInstr $ Unless $ makeLabel endLabel
+          appendInstr $ jumpUnless endLabel
           compileBlock blk
-          appendInstr $ Jump $ makeLabel startLabel
-          resolveLabel $ LabelIdx endLabel
+          appendInstr $ jump startLabel
+          resolveLabel endLabel
         compileExpr (NameExpr (Local name)) = error "NYI"
         compileExpr (NameExpr (Namespaced ns name)) = error "NYI"
 
-        compileExpr _ = do labelIdx <- generateLabel
-                           let label = Label $ LabelIdx labelIdx
-                           appendInstr $ Jump label
+        compileExpr _ = error "NYI"
 
         --compileLine :: Line 'R -> BuilderState
         --compileLine line = do labelIdx <- generateLabel
