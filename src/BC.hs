@@ -103,21 +103,34 @@ jumpUnless = JumpUnless . Label
 
 type BuilderState = State Builder ()
 
-data Scope = Scope
-  { breakTargets :: [LabelIdx]
-  , continueTargets :: [LabelIdx]
-  , locals :: [String]
-  }
+type Scope = ([LabelIdx], [LabelIdx], [String])
+--data Scope = Scope
+-- { breakTargets :: [LabelIdx]
+-- , continueTargets :: [LabelIdx]
+-- , locals :: [String]
+-- }
+
+_breakTargets :: Lens' Scope [LabelIdx]
+_breakTargets = _1
+
+_continueTargets :: Lens' Scope [LabelIdx]
+_continueTargets = _2
+
+_locals :: Lens' Scope [String]
+_locals = _3
+
+addLocals = (_locals <>~)
+
 emptyScope :: Scope
-emptyScope = Scope { breakTargets = [], continueTargets = [], locals = [] }
+emptyScope = ([], [], [])
 
 compileFn'' :: StringTable -> BcFn -> Builder
 compileFn'' strings (s, params, blk) =
-  let scope = emptyScope
+  let scope = extractParams params `addLocals` emptyScope
   in execState (compileBlock scope blk) emptyBuilder
   where compileBlock :: Scope -> Block 'R -> BuilderState
         compileBlock scope (Block lines) =
-          let newScope = scope
+          let newScope = getDecls lines `addLocals` scope
           in traverse_ (compileExpr newScope) $ lines^..folded._LineExpr
 
         compileExpr :: Scope -> Expr 'R -> BuilderState
