@@ -21,6 +21,7 @@ import Control.Lens.Fold (folded, (^..))
 import Control.Lens.Plated (cosmos, children, universe, plate)
 import Control.Lens.Wrapped
 import Data.Foldable (traverse_)
+--import Data.Functor (($>))
 import Data.Aeson
 import Control.Monad.State
 import Data.List (nub, mapAccumL, elemIndex)
@@ -102,45 +103,59 @@ jumpUnless = JumpUnless . Label
 
 type BuilderState = State Builder ()
 
-compileFn'' :: StringTable -> BcFn -> Builder
-compileFn'' strings (s, params, blk) = execState (compileBlock blk) emptyBuilder
-  where compileBlock :: Block 'R -> BuilderState
-        compileBlock (Block lines) = traverse_ compileExpr $ lines^..folded._LineExpr
+data Scope = Scope
+  { breakTargets :: [LabelIdx]
+  , continueTargets :: [LabelIdx]
+  , locals :: [String]
+  }
+emptyScope :: Scope
+emptyScope = Scope { breakTargets = [], continueTargets = [], locals = [] }
 
-        compileExpr :: Expr 'R -> BuilderState
-        compileExpr (LitStr s) = case (s `elemIndex`) strings of
+compileFn'' :: StringTable -> BcFn -> Builder
+compileFn'' strings (s, params, blk) =
+  let scope = emptyScope
+  in execState (compileBlock scope blk) emptyBuilder
+  where compileBlock :: Scope -> Block 'R -> BuilderState
+        compileBlock scope (Block lines) =
+          let newScope = scope
+          in traverse_ (compileExpr newScope) $ lines^..folded._LineExpr
+
+        compileExpr :: Scope -> Expr 'R -> BuilderState
+        compileExpr _ (LitStr s) = case (s `elemIndex`) strings of
           Just idx -> appendInstr $ PushString idx
           Nothing -> error $ "ICE: String not found in table: " ++ s
-        compileExpr (LitNum n) =
+        compileExpr _ (LitNum n) =
           appendInstr $ PushInt n
-        compileExpr (CallExpr f xs) = do
-          traverse_ compileExpr xs
-          compileExpr f
+        compileExpr scope (CallExpr f xs) = do
+          traverse_ (compileExpr scope) xs
+          compileExpr scope f
           appendInstr $ Call $ length xs
-        compileExpr (ConditionalExpr cond then_ else_) = do
+        compileExpr scope (ConditionalExpr cond then_ else_) = do
           endLabel <- generateLabel
           elseLabel <- generateLabel
-          compileExpr cond
+          compileExpr scope cond
           appendInstr $ jumpUnless elseLabel
-          compileBlock then_
+          compileBlock scope then_
           appendInstr $ jump endLabel
           resolveLabel $ elseLabel
-          compileBlock else_
+          compileBlock scope else_
           resolveLabel $ endLabel
-        compileExpr (LoopExpr cond blk) = do
+        compileExpr scope (LoopExpr cond blk) = do
           -- TODO break etc, endLabel + some kind of stack of "break; points"
           startLabel <- generateLabel
           endLabel <- generateLabel
           resolveLabel startLabel
-          compileExpr cond
+          compileExpr scope cond
           appendInstr $ jumpUnless endLabel
-          compileBlock blk
+          compileBlock scope  blk
           appendInstr $ jump startLabel
           resolveLabel endLabel
-        compileExpr (NameExpr (Local name)) = error "NYI"
-        compileExpr (NameExpr (Namespaced ns name)) = error "NYI"
+        compileExpr _ (NameExpr (Local name)) = error "NYI"
+        compileExpr _ (NameExpr (Namespaced ns name)) = error "NYI"
 
-        compileExpr _ = error "NYI"
+        compileExpr _ _ = error "NYI"
+
+        getDecls lines = (lines^..folded._LineDecl._Var)
 
         --compileLine :: Line 'R -> BuilderState
         --compileLine line = do labelIdx <- generateLabel
