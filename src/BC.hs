@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -34,6 +35,7 @@ data BCError
  = DuplicateFunctionName String
  | DuplicateImport ModuleName
  | DuplicateFunctioNames
+ | LabelNotResolved LabelIdx
  deriving (Show)
 
 newtype LabelIdx = LabelIdx Int
@@ -127,10 +129,30 @@ addBreakAndContinueTarget label scope = label `addBreakTarget` (label `addContin
 emptyScope :: Scope
 emptyScope = ([], [], [])
 
-compileFn'' :: StringTable -> BcFn -> Builder
-compileFn'' strings (s, params, blk) =
+resolveLabels :: Builder -> Either BCError [Instruction 'O]
+resolveLabels builder = sequence $ resolve <$> instrs builder
+  where resolve :: Instruction 'L -> Either BCError (Instruction 'O)
+        resolve (Jump loc) = Jump <$> resolveLoc loc
+        resolve (JumpUnless loc) = JumpUnless <$> resolveLoc loc
+        resolve (PushInt x) = Right $ PushInt x
+        resolve (PushString x) = Right $ PushString x
+        resolve (Call x) = Right $ Call x
+        resolve (LoadLocal x) = Right $ LoadLocal x
+        resolve (LoadGlobal x) = Right $ LoadGlobal x
+        resolve (LoadName x y) = Right $ LoadName x y
+
+        resolveLoc :: JumpData 'L -> Either BCError (JumpData 'O)
+        resolveLoc (Label idx) = case Map.lookup idx labels of
+            Just o -> Right $ Offset o
+            Nothing -> Left $ LabelNotResolved idx
+
+        labels :: LabelMap
+        labels = resolvedLabels builder
+
+compileFn :: StringTable -> BcFn -> Either BCError [Instruction 'O]
+compileFn strings (s, params, blk) =
   let scope = extractParams params `addLocals` emptyScope
-  in execState (compileBlock scope blk) emptyBuilder
+  in resolveLabels $ execState (compileBlock scope blk) emptyBuilder
   where compileBlock :: Scope -> Block 'R -> BuilderState
         compileBlock scope (Block lines) =
           let newScope = getDecls lines `addLocals` scope
@@ -169,8 +191,6 @@ compileFn'' strings (s, params, blk) =
         compileExpr _ (NameExpr (Local name)) = error "NYI"
         compileExpr _ (NameExpr (Namespaced ns name)) = error "NYI"
 
-        compileExpr _ _ = error "NYI"
-
         getDecls lines = (lines^..folded._LineDecl._Var)
 
         --compileLine :: Line 'R -> BuilderState
@@ -178,19 +198,10 @@ compileFn'' strings (s, params, blk) =
         --                      let label = Label $ LabelIdx labelIdx
         --                      appendInstr $ Jump label
 
--- compileFn' :: StringTable -> BcFn -> Builder
--- compileFn' strings (s, params, blk) = compileBlock emptyBuilder blk
---   where compileBlock :: Builder -> Block 'R -> Builder 
---         compileBlock builder (Block lines) = foldl compileLine builder lines
--- 
---         compileLine :: Builder -> Line 'R -> Builder
---         compileLine s _ = let (idx, newS) =  generateLabel s
---                           in appendInstr (Jump $ Label $ LabelIdx idx) newS
-
-compileFns :: StringTable -> [BcFn] -> Map.Map String [Instruction 'O]
-compileFns strings fns = Map.fromList []
-  where fnNames :: [String]
-        fnNames = (\(n, _, _) -> n) <$> fns
+compileFns :: StringTable -> [BcFn] -> Either BCError (Map.Map String [Instruction 'O])
+compileFns strings fns = Map.fromList <$> sequence (compile <$> fns)
+  where name (n, _, _) = n
+        compile o = (name o,) <$> compileFn strings o
 
 -- Moves Leftover top-level code to a function called Main
 reformatBlock :: Block 'R -> [Decl 'R]
@@ -220,7 +231,7 @@ gen name block = do
   let fns = getFunctions decls
   let imports = getImports decls
   let strings = nub $ concat (getStrs <$> fns)
-  let functions = compileFns strings fns
+  functions <- compileFns strings fns
   pure Module
        { name = name
        , dependencies = imports

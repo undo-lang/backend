@@ -173,7 +173,6 @@ newtype Block s = Block [Line s]
   deriving (Show, Generic)
 
 instance Wrapped (Block s)
-instance Eq (Block s)
 
 instance FromJSON (Block 'U) where
   parseJSON = withObject "block" $ \o -> do
