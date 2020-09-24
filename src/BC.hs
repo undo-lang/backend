@@ -119,7 +119,10 @@ _continueTargets = _2
 _locals :: Lens' Scope [String]
 _locals = _3
 
+addBreakTarget = (_breakTargets <>~) . pure
+addContinueTarget = (_breakTargets <>~) . pure
 addLocals = (_locals <>~)
+addBreakAndContinueTarget label scope = label `addBreakTarget` (label `addContinueTarget` scope)
 
 emptyScope :: Scope
 emptyScope = ([], [], [])
@@ -160,7 +163,7 @@ compileFn'' strings (s, params, blk) =
           resolveLabel startLabel
           compileExpr scope cond
           appendInstr $ jumpUnless endLabel
-          compileBlock scope  blk
+          compileBlock (endLabel `addBreakAndContinueTarget` scope) blk
           appendInstr $ jump startLabel
           resolveLabel endLabel
         compileExpr _ (NameExpr (Local name)) = error "NYI"

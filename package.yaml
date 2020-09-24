@@ -45,7 +45,8 @@ executables:
 
 tests:
   undo-backend-test:
-    main:                Spec.hs
+    defaults: hspec/hspec@master
+    main:                Main.hs
     source-dirs:         test
     ghc-options:
     - -threaded
