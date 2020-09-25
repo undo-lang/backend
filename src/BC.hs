@@ -15,17 +15,17 @@ module BC
 
 --import Control.Monad.State (StateT(..), runStateT)
 import GHC.Generics
-import Debug.Trace
-import Control.Lens ((^.), Lens', lens, (<<+~), (<>~), (<<+=), (<>=), at, (?~), (%=), uses)
-import Control.Lens.Combinators (toListOf, over,  _1, _2, _3)
+--import Debug.Trace
+import Control.Lens ((^.), Lens', lens, (<>~), (<<+=), (<>=), at, (?~), (%=), uses)
+import Control.Lens.Combinators (toListOf, _1, _2, _3)
 import Control.Lens.Fold (folded, (^..))
-import Control.Lens.Plated (cosmos, children, universe, plate)
-import Control.Lens.Wrapped
+import Control.Lens.Plated (cosmos) -- (children, universe, plate)
+--import Control.Lens.Wrapped -- XXX not used anymore?
 import Data.Foldable (traverse_)
 --import Data.Functor (($>))
 import Data.Aeson
 import Control.Monad.State
-import Data.List (nub, mapAccumL, elemIndex)
+import Data.List (nub, elemIndex)
 import qualified Data.Map as Map
 
 import AST
@@ -47,6 +47,7 @@ data JumpData :: JumpStage -> * where
   Offset :: Int -> JumpData 'O
 deriving instance Show (JumpData s)
 instance ToJSON (JumpData s) where
+  -- TODO ToJSON (JumpData 'O)?
   toJSON (Offset x) = object [ "offset" .= x ]
 
 data Instruction s
@@ -77,7 +78,8 @@ data Builder = Builder
   , instrs :: [Instruction 'L]
   , resolvedLabels :: LabelMap
   }
-emptyBuilder = Builder { lastLabel = 0, instrs = [] }
+emptyBuilder :: Builder
+emptyBuilder = Builder { lastLabel = 0, instrs = [], resolvedLabels = Map.empty }
 
 _lastLabel :: Lens' Builder Int
 _lastLabel = lens lastLabel (\s a -> s { lastLabel = a })
@@ -94,24 +96,19 @@ generateLabel = LabelIdx <$> (_lastLabel <<+= 1)
 appendInstr :: MonadState Builder m => Instruction 'L -> m ()
 appendInstr = (_instrs <>=) . pure
 
---resolveLabel :: MonadState Builder m => LabelIdx -> m ()
+resolveLabel :: MonadState Builder m => LabelIdx -> m ()
 resolveLabel labelIdx = do i <- uses _instrs length
                            _resolvedLabels %= (at labelIdx ?~ i)
---resolveLabel labelIdx = do instrs <- _instrs
---                           at labelIdx ?~ length (instrs.instrs)
 
+jump :: LabelIdx -> Instruction 'L
 jump = Jump . Label
+jumpUnless :: LabelIdx -> Instruction 'L
 jumpUnless = JumpUnless . Label
 
 type BuilderState = State Builder ()
 
+-- (break, continue, locals)
 type Scope = ([LabelIdx], [LabelIdx], [String])
---data Scope = Scope
--- { breakTargets :: [LabelIdx]
--- , continueTargets :: [LabelIdx]
--- , locals :: [String]
--- }
-
 _breakTargets :: Lens' Scope [LabelIdx]
 _breakTargets = _1
 
@@ -121,9 +118,16 @@ _continueTargets = _2
 _locals :: Lens' Scope [String]
 _locals = _3
 
+addBreakTarget :: LabelIdx -> Scope -> Scope
 addBreakTarget = (_breakTargets <>~) . pure
+
+addContinueTarget  :: LabelIdx -> Scope -> Scope
 addContinueTarget = (_breakTargets <>~) . pure
+
+addLocals   :: [String] -> Scope -> Scope
 addLocals = (_locals <>~)
+
+addBreakAndContinueTarget   :: LabelIdx -> Scope -> Scope
 addBreakAndContinueTarget label scope = label `addBreakTarget` (label `addContinueTarget` scope)
 
 emptyScope :: Scope
@@ -150,7 +154,7 @@ resolveLabels builder = sequence $ resolve <$> instrs builder
         labels = resolvedLabels builder
 
 compileFn :: StringTable -> BcFn -> Either BCError [Instruction 'O]
-compileFn strings (s, params, blk) =
+compileFn strings (_, params, blk) =
   let scope = extractParams params `addLocals` emptyScope
   in resolveLabels $ execState (compileBlock scope blk) emptyBuilder
   where compileBlock :: Scope -> Block 'R -> BuilderState
@@ -159,7 +163,7 @@ compileFn strings (s, params, blk) =
           in traverse_ (compileExpr newScope) $ lines^..folded._LineExpr
 
         compileExpr :: Scope -> Expr 'R -> BuilderState
-        compileExpr _ (LitStr s) = case (s `elemIndex`) strings of
+        compileExpr _ (LitStr s) = case s `elemIndex` strings of
           Just idx -> appendInstr $ PushString idx
           Nothing -> error $ "ICE: String not found in table: " ++ s
         compileExpr _ (LitNum n) =
@@ -179,7 +183,6 @@ compileFn strings (s, params, blk) =
           compileBlock scope else_
           resolveLabel $ endLabel
         compileExpr scope (LoopExpr cond blk) = do
-          -- TODO break etc, endLabel + some kind of stack of "break; points"
           startLabel <- generateLabel
           endLabel <- generateLabel
           resolveLabel startLabel
@@ -188,8 +191,13 @@ compileFn strings (s, params, blk) =
           compileBlock (endLabel `addBreakAndContinueTarget` scope) blk
           appendInstr $ jump startLabel
           resolveLabel endLabel
-        compileExpr _ (NameExpr (Local name)) = error "NYI"
-        compileExpr _ (NameExpr (Namespaced ns name)) = error "NYI"
+        compileExpr scope (NameExpr (Local name)) = case name `elemIndex` (scope^._locals) of
+          Just idx -> appendInstr $ LoadLocal idx
+          Nothing -> error "local not found"
+        compileExpr _ (NameExpr (Namespaced ns name)) =
+          appendInstr $ LoadName ns name
+
+        -- TODO break, continue etc
 
         getDecls lines = (lines^..folded._LineDecl._Var)
 
