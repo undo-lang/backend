@@ -7,7 +7,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE GADTs #-}
--- LANGUAGE BlockArguments
 
 module AST where
 

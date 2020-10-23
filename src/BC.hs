@@ -36,19 +36,28 @@ data BCError
  | DuplicateImport ModuleName
  | DuplicateFunctioNames
  | LabelNotResolved LabelIdx
+ | UnresolvedModule ModuleName
  deriving (Show)
 
 newtype LabelIdx = LabelIdx Int
   deriving (Show, Generic, Eq, Ord)
 deriving instance ToJSON LabelIdx
-data JumpStage = L | O -- Label / Offset
-data JumpData :: JumpStage -> * where
+data BCStage = L | O -- Label / Offset
+data JumpData :: BCStage -> * where
   Label :: LabelIdx -> JumpData 'L
   Offset :: Int -> JumpData 'O
 deriving instance Show (JumpData s)
 instance ToJSON (JumpData s) where
   -- TODO ToJSON (JumpData 'O)?
   toJSON (Offset x) = object [ "offset" .= x ]
+
+data BCModuleName :: BCStage -> * where
+  UnresolvedModuleName :: ModuleName -> BCModuleName 'L
+  CurrentModuleName :: BCModuleName 'L
+  ResolvedModuleName :: ModuleName -> BCModuleName 'O
+deriving instance Show (BCModuleName  s)
+instance ToJSON (BCModuleName s) where
+  toJSON (ResolvedModuleName (ModuleName m)) = object [ "module" .= m ]
 
 data Instruction s
  = PushInt Int
@@ -58,7 +67,7 @@ data Instruction s
  | Jump (JumpData s)
  | LoadLocal Int
  | LoadGlobal String
- | LoadName ModuleName String
+ | LoadName (BCModuleName s) String
   deriving (Show, Generic)
 deriving instance ToJSON (Instruction s) -- ???
 
@@ -133,8 +142,8 @@ addBreakAndContinueTarget label scope = label `addBreakTarget` (label `addContin
 emptyScope :: Scope
 emptyScope = ([], [], [])
 
-resolveLabels :: Builder -> Either BCError [Instruction 'O]
-resolveLabels builder = sequence $ resolve <$> instrs builder
+resolveBuilder :: ModuleName -> Builder -> Either BCError [Instruction 'O]
+resolveBuilder moduleName builder = sequence $ resolve <$> instrs builder
   where resolve :: Instruction 'L -> Either BCError (Instruction 'O)
         resolve (Jump loc) = Jump <$> resolveLoc loc
         resolve (JumpUnless loc) = JumpUnless <$> resolveLoc loc
@@ -143,7 +152,10 @@ resolveLabels builder = sequence $ resolve <$> instrs builder
         resolve (Call x) = Right $ Call x
         resolve (LoadLocal x) = Right $ LoadLocal x
         resolve (LoadGlobal x) = Right $ LoadGlobal x
-        resolve (LoadName x y) = Right $ LoadName x y
+        resolve (LoadName CurrentModuleName v) = Right $ LoadName (ResolvedModuleName moduleName) v
+        resolve (LoadName (UnresolvedModuleName mod) v) = if True -- TODO if mod `elem` imports
+          then Right $ LoadName (ResolvedModuleName mod) v
+          else Left $ UnresolvedModule mod
 
         resolveLoc :: JumpData 'L -> Either BCError (JumpData 'O)
         resolveLoc (Label idx) = case Map.lookup idx labels of
@@ -153,10 +165,10 @@ resolveLabels builder = sequence $ resolve <$> instrs builder
         labels :: LabelMap
         labels = resolvedLabels builder
 
-compileFn :: StringTable -> BcFn -> Either BCError [Instruction 'O]
-compileFn strings (_, params, blk) =
+compileFn :: ModuleName -> [String] -> StringTable -> BcFn -> Either BCError [Instruction 'O]
+compileFn moduleName fnNames strings (_, params, blk) =
   let scope = extractParams params `addLocals` emptyScope
-  in resolveLabels $ execState (compileBlock scope blk) emptyBuilder
+  in resolveBuilder moduleName $ execState (compileBlock scope blk) emptyBuilder
   where compileBlock :: Scope -> Block 'R -> BuilderState
         compileBlock scope (Block lines) =
           let newScope = getDecls lines `addLocals` scope
@@ -193,9 +205,11 @@ compileFn strings (_, params, blk) =
           resolveLabel endLabel
         compileExpr scope (NameExpr (Local name)) = case name `elemIndex` (scope^._locals) of
           Just idx -> appendInstr $ LoadLocal idx
-          Nothing -> error "local not found"
+          Nothing -> case name `elemIndex` fnNames of
+            Just _ -> appendInstr $ LoadName CurrentModuleName name
+            Nothing -> error $ "local not found. want: `" ++ name ++ "`, got = " ++ show (scope^._locals)
         compileExpr _ (NameExpr (Namespaced ns name)) =
-          appendInstr $ LoadName ns name
+          appendInstr $ LoadName (UnresolvedModuleName ns) name
 
         -- TODO break, continue etc
 
@@ -206,10 +220,11 @@ compileFn strings (_, params, blk) =
         --                      let label = Label $ LabelIdx labelIdx
         --                      appendInstr $ Jump label
 
-compileFns :: StringTable -> [BcFn] -> Either BCError (Map.Map String [Instruction 'O])
-compileFns strings fns = Map.fromList <$> sequence (compile <$> fns)
+compileFns :: ModuleName -> StringTable -> [BcFn] -> Either BCError (Map.Map String [Instruction 'O])
+compileFns moduleName strings fns = Map.fromList <$> sequence (compile <$> fns)
   where name (n, _, _) = n
-        compile o = (name o,) <$> compileFn strings o
+        fnNames = name <$> fns
+        compile o = (name o,) <$> compileFn moduleName fnNames strings o
 
 -- Moves Leftover top-level code to a function called Main
 reformatBlock :: Block 'R -> [Decl 'R]
@@ -239,7 +254,7 @@ gen name block = do
   let fns = getFunctions decls
   let imports = getImports decls
   let strings = nub $ concat (getStrs <$> fns)
-  functions <- compileFns strings fns
+  functions <- compileFns name strings fns
   pure Module
        { name = name
        , dependencies = imports
