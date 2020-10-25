@@ -23,7 +23,7 @@ data Error
 
 compile :: String -> BS.ByteString -> Either Error Module
 compile rawModuleName contents = do
-  let moduleName = ModuleName $ splitOn " " rawModuleName
+  let moduleName = ModuleName $ splitOn "." rawModuleName
   block <- traceShowId $ readBlock contents
   resolved <- traceShowId $ readRoot block
   bc <- genBC moduleName resolved

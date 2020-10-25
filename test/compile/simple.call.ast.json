@@ -13,7 +13,7 @@
             ],
             "fn": {
                 "name": "print",
-		"module": ["Prelude"],
+                "module": ["Prelude"],
                 "type": "Qualified"
             },
             "type": "Call"
