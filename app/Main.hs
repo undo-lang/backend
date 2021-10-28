@@ -23,4 +23,4 @@ runCli [name, file] = do
   putStrLn $ "You want to read " ++ file
   mod <- runCompile name file
   either (putStrLn . show) (writeModule name) mod
-runCli _      = putStrLn "You need to pass `module name` `module AST JSON file`"
+runCli _      = putStrLn "You need to pass <module name> <module AST JSON file>"
