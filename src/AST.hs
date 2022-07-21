@@ -82,7 +82,13 @@ instance FromJSON (Expr 'U) where
     ]
 
 newtype Parameter = Parameter String
-  deriving (Generic, FromJSON, Show)
+  deriving (Generic, Show)
+
+instance FromJSON Parameter where
+  parseJSON = withObject "parameter" $ \o -> do
+    type_ <- o .: "type"
+    guard ((type_ :: String) == "Parameter")
+    Parameter <$> o .: "name"
 
 newtype ParameterList = ParameterList [Parameter]
   deriving (Generic, FromJSON, Show)
@@ -148,7 +154,7 @@ instance FromJSON (Decl 'U) where
     case type_ of
       "Import" -> Import <$> o .: "value"
       "Var"    -> Var <$> o .: "name"
-      "Fn"     -> Fn <$> o .: "fn" <*> o .: "parameter" <*> o .: "block"
+      "Fn"     -> Fn <$> o .: "name" <*> o .: "parameter" <*> o .: "body"
       _        -> fail $ "Unknown decl type: " ++ type_
 
 data Line s = LineExpr (Expr s) | LineDecl (Decl s)

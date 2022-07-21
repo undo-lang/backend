@@ -7,7 +7,7 @@ module Lib
 import qualified Data.ByteString.Lazy as BS
 
 import Debug.Trace
-import Control.Lens (_Left, _Right, set, over)
+import Control.Lens (_Left, over)
 import Data.Aeson (eitherDecode)
 import Data.List.Split (splitOn)
 

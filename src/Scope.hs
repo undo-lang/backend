@@ -11,7 +11,7 @@ module Scope
 import Control.Monad (foldM)
 import qualified Data.Map as Map
 import Data.Traversable (traverse)
-import Control.Monad.State (StateT(..), evalStateT, runStateT)
+import Control.Monad.State (StateT(..), evalStateT)
 import Control.Lens
 import Debug.Trace
 
@@ -27,6 +27,7 @@ data ScopeError
 
 type Aliases = Map.Map String ModuleName -- TODO implement those everywhere else
 type Scope = ([String], [ModuleName], Aliases)
+emptyScope :: Scope
 emptyScope = (["MAIN"], [ModuleName ["Prelude"]], Map.empty)
 
 names :: Lens' Scope [String]
@@ -36,8 +37,11 @@ namespaces = _2
 aliases :: Lens' Scope Aliases
 aliases = _3
 
+addName :: String -> Scope -> Scope
 addName = (names <>~) . pure
+addNames :: [String] -> Scope -> Scope
 addNames = (names <>~)
+addNamespace :: ModuleName -> Scope -> Scope
 addNamespace = (namespaces <>~) . pure
 
 -- from https://stackoverflow.com/questions/11652809/how-to-implement-mapaccumm
@@ -55,18 +59,20 @@ type ResolverWithScope (s :: NameStage -> *)
   = Scope -> s 'U -> Either ScopeError (s 'R, Scope)
 
 resolveTree :: Resolver Block
-resolveTree scope (Block lines) = Block <$> mapAccumM_ resolveLine scope lines
+resolveTree scope (Block lines) = Block <$> mapAccumM_ resolveLine hoistedScope lines
   where topLevelFunctions :: [String]
         topLevelFunctions = lines^..folded._LineDecl._Fn._1
 
-        hoistedScope = topLevelFunctions `addNames` scope
+        --hoistedScope = topLevelFunctions `addNames` scope
+        hoistedScope = scope
 
         resolveLine :: ResolverWithScope Line
         resolveLine scope (LineDecl (Var name)) =
           (LineDecl $ Var name,) <$> declName scope name
 
         resolveLine scope (LineDecl (Fn name params body_)) =
-          do newScope <- declNames scope (name:extractParams params)
+          -- TODO addName `name` in case it's not a global function, for local ones
+          do newScope <- declNames scope $ name:extractParams params
              resolvedBody <- resolveTree newScope body_
              outerScope <- declName scope name
              pure $ (LineDecl $ Fn name params resolvedBody, outerScope)

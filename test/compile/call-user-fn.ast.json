@@ -1,0 +1,48 @@
+{
+    "body": [
+        {
+            "body": {
+                "body": [
+                    {
+                        "name": "x",
+                        "type": "Unqualified"
+                    }
+                ],
+                "type": "Block"
+            },
+            "name": "a",
+            "parameter": [
+                {
+                    "name": "x",
+                    "type": "Parameter"
+                }
+            ],
+            "type": "Fn"
+        },
+        {
+            "argument": [
+                {
+                    "argument": [
+                        {
+                            "type": "Num",
+                            "value": 1
+                        }
+                    ],
+                    "fn": {
+                        "name": "a",
+                        "type": "Unqualified"
+                    },
+                    "type": "Call"
+                }
+            ],
+            "fn": {
+                "name": "print",
+                "module": ["Prelude"],
+                "type": "Qualified"
+            },
+            "type": "Call"
+        }
+    ],
+    "type": "Block"
+}
+
