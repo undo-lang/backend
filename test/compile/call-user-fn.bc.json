@@ -7,15 +7,8 @@
                 "tag": "PushInt"
             },
             {
-                "contents": [
-                    {
-                        "module": [
-                            "call-user-fn"
-                        ]
-                    },
-                    "a"
-                ],
-                "tag": "LoadName"
+                "contents": "a",
+                "tag": "LoadGlobal"
             },
             {
                 "contents": 1,

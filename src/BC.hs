@@ -206,7 +206,7 @@ compileFn moduleName fnNames strings (_, params, blk) =
         compileExpr scope (NameExpr (Local name)) = case name `elemIndex` (scope^._locals) of
           Just idx -> appendInstr $ LoadLocal idx
           Nothing -> case name `elemIndex` fnNames of
-            Just _ -> appendInstr $ LoadName CurrentModuleName name
+            Just _ -> appendInstr $ LoadGlobal name --LoadName CurrentModuleName name
             Nothing -> error $ "local not found. want: `" ++ name ++ "`, got = " ++ show (scope^._locals)
         compileExpr _ (NameExpr (Namespaced ns name)) =
           appendInstr $ LoadName (UnresolvedModuleName ns) name
