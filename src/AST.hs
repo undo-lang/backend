@@ -97,7 +97,7 @@ uncurry3 :: (a -> b -> c -> d) -> (a, b, c) -> d
 uncurry3 f (a, b, c) = f a b c
 
 data Decl s
-  = Import ModuleName
+  = Import ModuleName -- TODO other forms of import
   | Var String
   | Fn String ParameterList (Block s)
   deriving (Show)
