@@ -1,0 +1,30 @@
+{
+    "body": [
+        {
+            "type": "Import",
+            "value": [
+                "Foo"
+            ]
+        },
+        {
+            "argument": [
+                {
+                    "type": "String",
+                    "value": "Hello world!"
+                },
+                {
+                    "type": "Num",
+                    "value": 42
+                }
+            ],
+            "fn": {
+                "name": "print",
+                "module": ["Foo"],
+                "type": "Qualified"
+            },
+            "type": "Call"
+        }
+    ],
+    "type": "Block"
+}
+
