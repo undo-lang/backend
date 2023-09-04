@@ -1,0 +1,6 @@
+[
+  {"name": "simple.call"},
+  {"name": "call-user-fn"},
+  {"name": "imported.name"},
+  {"name": "non.imported", "is-error": true}
+]
