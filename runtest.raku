@@ -26,6 +26,7 @@ for @specs -> % (:$name, :$is-error) {
     my $bc-file = "test/compile/$name.bc.json";
     my %expected-bc = from-json(slurp $bc-file);
     is-deeply %generated, %expected-bc, "Correct BC generated for $name";
+    unlink $generated;
   }
 }
 
