@@ -10,10 +10,10 @@
 
 module AST where
 
-import Debug.Trace
 import GHC.Generics
 import Control.Monad (guard)
 import Data.Foldable (asum)
+import Data.Kind (Type)
 import Data.Aeson --(FromJSON(..), (.:), withObject, Object, Object(..))
 import Control.Lens.Prism
 import Control.Lens.Wrapped
@@ -24,7 +24,7 @@ newtype ModuleName = ModuleName [String]
   deriving (Generic, FromJSON, ToJSON, Eq, Show)
 
 data NameStage = U | R
-data Name :: NameStage -> * where
+data Name :: NameStage -> Type where
   Unresolved :: String -> Name 'U
   Prefixed   :: ModuleName -> String -> Name 'U
   Local      :: String -> Name 'R
@@ -77,7 +77,7 @@ instance FromJSON (Expr 'U) where
         "String" -> LitStr <$> o .: "value"
         "Num"    -> LitNum <$> o .: "value"
         "Call"   -> CallExpr <$> o .: "fn" <*> o .: "argument"
-        "Conditional" -> ConditionalExpr <$> o .: "cond" <*> o .: "then" <*> o .: "else"
+        "Conditional" -> ConditionalExpr <$> o .: "condition" <*> o .: "then" <*> o .: "else"
         _        -> fail $ "Unknown expr type: " ++ type_
     ]
 
