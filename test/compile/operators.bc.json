@@ -1,0 +1,219 @@
+{
+  "dependencies": [],
+  "functions": {
+    "MAIN": [
+      {
+        "contents": 1,
+        "tag": "PushInt"
+      },
+      {
+        "contents": 2,
+        "tag": "PushInt"
+      },
+      {
+        "contents": [
+          {
+            "module": [
+              "Prelude"
+            ]
+          },
+          "+"
+        ],
+        "tag": "LoadName"
+      },
+      {
+        "contents": 2,
+        "tag": "Call"
+      },
+      {
+        "contents": 3,
+        "tag": "PushInt"
+      },
+      {
+        "contents": [
+          {
+            "module": [
+              "Prelude"
+            ]
+          },
+          "/"
+        ],
+        "tag": "LoadName"
+      },
+      {
+        "contents": 2,
+        "tag": "Call"
+      },
+      {
+        "contents": 4,
+        "tag": "PushInt"
+      },
+      {
+        "contents": [
+          {
+            "module": [
+              "Prelude"
+            ]
+          },
+          "*"
+        ],
+        "tag": "LoadName"
+      },
+      {
+        "contents": 2,
+        "tag": "Call"
+      },
+      {
+        "contents": 4,
+        "tag": "PushInt"
+      },
+      {
+        "contents": 5,
+        "tag": "PushInt"
+      },
+      {
+        "contents": [
+          {
+            "module": [
+              "Prelude"
+            ]
+          },
+          "-"
+        ],
+        "tag": "LoadName"
+      },
+      {
+        "contents": 2,
+        "tag": "Call"
+      },
+      {
+        "contents": 6,
+        "tag": "PushInt"
+      },
+      {
+        "contents": [
+          {
+            "module": [
+              "Prelude"
+            ]
+          },
+          "<"
+        ],
+        "tag": "LoadName"
+      },
+      {
+        "contents": 2,
+        "tag": "Call"
+      },
+      {
+        "contents": 6,
+        "tag": "PushInt"
+      },
+      {
+        "contents": 7,
+        "tag": "PushInt"
+      },
+      {
+        "contents": [
+          {
+            "module": [
+              "Prelude"
+            ]
+          },
+          ">"
+        ],
+        "tag": "LoadName"
+      },
+      {
+        "contents": 2,
+        "tag": "Call"
+      },
+      {
+        "contents": 8,
+        "tag": "PushInt"
+      },
+      {
+        "contents": [
+          {
+            "module": [
+              "Prelude"
+            ]
+          },
+          ">="
+        ],
+        "tag": "LoadName"
+      },
+      {
+        "contents": 2,
+        "tag": "Call"
+      },
+      {
+        "contents": 8,
+        "tag": "PushInt"
+      },
+      {
+        "contents": 9,
+        "tag": "PushInt"
+      },
+      {
+        "contents": [
+          {
+            "module": [
+              "Prelude"
+            ]
+          },
+          "<="
+        ],
+        "tag": "LoadName"
+      },
+      {
+        "contents": 2,
+        "tag": "Call"
+      },
+      {
+        "contents": 10,
+        "tag": "PushInt"
+      },
+      {
+        "contents": [
+          {
+            "module": [
+              "Prelude"
+            ]
+          },
+          "=="
+        ],
+        "tag": "LoadName"
+      },
+      {
+        "contents": 2,
+        "tag": "Call"
+      },
+      {
+        "contents": 11,
+        "tag": "PushInt"
+      },
+      {
+        "contents": [
+          {
+            "module": [
+              "Prelude"
+            ]
+          },
+          "!="
+        ],
+        "tag": "LoadName"
+      },
+      {
+        "contents": 2,
+        "tag": "Call"
+      }
+    ]
+  },
+  "name": [
+    "operators"
+  ],
+  "strings": [
+    "MAIN"
+  ]
+}

@@ -1,0 +1,181 @@
+{
+  "type": "Block",
+  "body": [
+    {
+      "argument": [
+        {
+          "type": "Call",
+          "argument": [
+            {
+              "type": "Call",
+              "fn": {
+                "type": "Qualified",
+                "module": [
+                  "Prelude"
+                ],
+                "name": "+"
+              },
+              "argument": [
+                {
+                  "type": "Num",
+                  "value": 1
+                },
+                {
+                  "value": 2,
+                  "type": "Num"
+                }
+              ]
+            },
+            {
+              "type": "Num",
+              "value": 3
+            }
+          ],
+          "fn": {
+            "type": "Qualified",
+            "module": [
+              "Prelude"
+            ],
+            "name": "/"
+          }
+        },
+        {
+          "value": 4,
+          "type": "Num"
+        }
+      ],
+      "fn": {
+        "type": "Qualified",
+        "module": [
+          "Prelude"
+        ],
+        "name": "*"
+      },
+      "type": "Call"
+    },
+    {
+      "argument": [
+        {
+          "type": "Call",
+          "fn": {
+            "type": "Qualified",
+            "module": [
+              "Prelude"
+            ],
+            "name": "-"
+          },
+          "argument": [
+            {
+              "type": "Num",
+              "value": 4
+            },
+            {
+              "value": 5,
+              "type": "Num"
+            }
+          ]
+        },
+        {
+          "value": 6,
+          "type": "Num"
+        }
+      ],
+      "fn": {
+        "type": "Qualified",
+        "module": [
+          "Prelude"
+        ],
+        "name": "<"
+      },
+      "type": "Call"
+    },
+    {
+      "argument": [
+        {
+          "type": "Call",
+          "argument": [
+            {
+              "value": 6,
+              "type": "Num"
+            },
+            {
+              "value": 7,
+              "type": "Num"
+            }
+          ],
+          "fn": {
+            "type": "Qualified",
+            "name": ">",
+            "module": [
+              "Prelude"
+            ]
+          }
+        },
+        {
+          "value": 8,
+          "type": "Num"
+        }
+      ],
+      "fn": {
+        "module": [
+          "Prelude"
+        ],
+        "type": "Qualified",
+        "name": ">="
+      },
+      "type": "Call"
+    },
+    {
+      "argument": [
+        {
+          "argument": [
+            {
+              "argument": [
+                {
+                  "value": 8,
+                  "type": "Num"
+                },
+                {
+                  "type": "Num",
+                  "value": 9
+                }
+              ],
+              "fn": {
+                "name": "<=",
+                "module": [
+                  "Prelude"
+                ],
+                "type": "Qualified"
+              },
+              "type": "Call"
+            },
+            {
+              "type": "Num",
+              "value": 10
+            }
+          ],
+          "fn": {
+            "name": "==",
+            "type": "Qualified",
+            "module": [
+              "Prelude"
+            ]
+          },
+          "type": "Call"
+        },
+        {
+          "value": 11,
+          "type": "Num"
+        }
+      ],
+      "type": "Call",
+      "fn": {
+        "name": "!=",
+        "module": [
+          "Prelude"
+        ],
+        "type": "Qualified"
+      }
+    }
+  ]
+}
