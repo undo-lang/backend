@@ -7,6 +7,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 module BC
     ( gen
     , Module
@@ -26,6 +27,7 @@ import Data.Foldable (traverse_)
 import Data.Aeson
 import Control.Monad.State
 import Data.List (nub, elemIndex)
+import Data.Kind (Type)
 import qualified Data.Map as Map
 
 import AST
@@ -43,20 +45,20 @@ newtype LabelIdx = LabelIdx Int
   deriving (Show, Generic, Eq, Ord)
 deriving instance ToJSON LabelIdx
 data BCStage = L | O -- Label / Offset
-data JumpData :: BCStage -> * where
+data JumpData :: BCStage -> Type where
   Label :: LabelIdx -> JumpData 'L
   Offset :: Int -> JumpData 'O
 deriving instance Show (JumpData s)
-instance ToJSON (JumpData s) where
+instance ToJSON (JumpData 'O) where
   -- TODO ToJSON (JumpData 'O)?
   toJSON (Offset x) = object [ "offset" .= x ]
 
-data BCModuleName :: BCStage -> * where
+data BCModuleName :: BCStage -> Type where
   UnresolvedModuleName :: ModuleName -> BCModuleName 'L
   CurrentModuleName :: BCModuleName 'L
   ResolvedModuleName :: ModuleName -> BCModuleName 'O
 deriving instance Show (BCModuleName  s)
-instance ToJSON (BCModuleName s) where
+instance ToJSON (BCModuleName 'O) where
   toJSON (ResolvedModuleName (ModuleName m)) = object [ "module" .= m ]
 
 data Instruction s
@@ -69,7 +71,7 @@ data Instruction s
  | LoadGlobal String
  | LoadName (BCModuleName s) String
   deriving (Show, Generic)
-deriving instance ToJSON (Instruction s) -- ???
+deriving instance ToJSON (Instruction 'O) -- ???
 
 type BcFn = (String, ParameterList, Block 'R)
 
@@ -143,7 +145,7 @@ emptyScope :: Scope
 emptyScope = ([], [], [])
 
 resolveBuilder :: ModuleName -> Builder -> Either BCError [Instruction 'O]
-resolveBuilder moduleName builder = sequence $ resolve <$> instrs builder
+resolveBuilder moduleName builder = traverse resolve $ instrs builder
   where resolve :: Instruction 'L -> Either BCError (Instruction 'O)
         resolve (Jump loc) = Jump <$> resolveLoc loc
         resolve (JumpUnless loc) = JumpUnless <$> resolveLoc loc

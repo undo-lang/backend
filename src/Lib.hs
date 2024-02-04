@@ -26,8 +26,7 @@ compile rawModuleName contents = do
   let moduleName = ModuleName $ splitOn "." rawModuleName
   block <- traceShowId $ readBlock contents
   resolved <- traceShowId $ readRoot block
-  bc <- genBC moduleName resolved
-  pure bc
+  genBC moduleName resolved
 
 readBlock :: BS.ByteString -> Either Error (Block 'U)
 readBlock = over _Left ParseError . eitherDecode

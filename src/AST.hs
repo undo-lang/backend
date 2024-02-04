@@ -15,10 +15,10 @@ import Control.Monad (guard)
 import Data.Foldable (asum)
 import Data.Kind (Type)
 import Data.Aeson --(FromJSON(..), (.:), withObject, Object, Object(..))
-import Control.Lens.Prism
-import Control.Lens.Wrapped
-import Control.Lens.Plated
-import Control.Lens.Type -- TMP
+import Control.Lens.Prism (prism', Prism')
+import Control.Lens.Wrapped (Wrapped)
+import Control.Lens.Plated (Plated(..))
+import Control.Lens.Type (Traversal') -- TMP
 
 newtype ModuleName = ModuleName [String]
   deriving (Generic, FromJSON, ToJSON, Eq, Show)
@@ -32,12 +32,12 @@ data Name :: NameStage -> Type where
 deriving instance Show (Name s)
 
 _Local :: Prism' (Name 'R) String
-_Local = prism' Local $ (\case Local n -> Just n
-                               _        -> Nothing)
+_Local = prism' Local (\case Local n -> Just n
+                             _        -> Nothing)
 
 _Namespaced :: Prism' (Name 'R) (ModuleName, String)
-_Namespaced = prism' (uncurry Namespaced) $ (\case (Namespaced m s) -> Just (m, s)
-                                                   _        -> Nothing)
+_Namespaced = prism' (uncurry Namespaced) (\case (Namespaced m s) -> Just (m, s)
+                                                 _        -> Nothing)
 
 instance FromJSON (Name 'U) where
   parseJSON = withObject "name" $ \o -> do
@@ -57,16 +57,16 @@ data Expr s
   deriving (Show)
 
 _LitStr :: Prism' (Expr s) String
-_LitStr = prism' LitStr $ (\case LitStr s -> Just s
-                                 _        -> Nothing)
+_LitStr = prism' LitStr (\case LitStr s -> Just s
+                               _        -> Nothing)
 
 _CallExpr :: Prism' (Expr s) (Expr s, [Expr s])
-_CallExpr = prism' (uncurry CallExpr) $ (\case (CallExpr c a) -> Just (c, a)
-                                               _ -> Nothing)
+_CallExpr = prism' (uncurry CallExpr) (\case (CallExpr c a) -> Just (c, a)
+                                             _ -> Nothing)
 
 _NameExpr :: Prism' (Expr s) (Name s)
-_NameExpr = prism' NameExpr $ (\case NameExpr n -> Just n
-                                     _          -> Nothing)
+_NameExpr = prism' NameExpr (\case NameExpr n -> Just n
+                                   _          -> Nothing)
 
 instance FromJSON (Expr 'U) where
   parseJSON = withObject "expr" $ \o -> asum [
@@ -103,36 +103,36 @@ data Decl s
   deriving (Show)
 
 _Import :: Prism' (Decl s) ModuleName
-_Import = prism' Import $ (\case Import m -> Just m
-                                 _        -> Nothing)
+_Import = prism' Import (\case Import m -> Just m
+                               _        -> Nothing)
 _Var :: Prism' (Decl s) String
-_Var = prism' Var $ (\case Var s -> Just s
-                           _     -> Nothing)
+_Var = prism' Var (\case Var s -> Just s
+                         _     -> Nothing)
 
 _Fn :: Prism' (Decl s) (String, ParameterList, Block s)
-_Fn = prism' (uncurry3 Fn) $ (\case (Fn s p b) -> Just (s, p, b)
-                                    _          -> Nothing)
+_Fn = prism' (uncurry3 Fn) (\case (Fn s p b) -> Just (s, p, b)
+                                  _          -> Nothing)
 
 instance Plated (Decl 'R) where
   plate f (Fn s p b) = Fn s p <$> plateBlock f b
     where plateBlock :: Traversal' (Block s) (Decl s)
-          plateBlock f (Block xs) = Block <$> sequenceA (plateElem f <$> xs)
+          plateBlock f (Block xs) = Block <$> traverse (plateElem f) xs
 
           plateElem :: Traversal' (Line s) (Decl s)
           plateElem f (LineDecl d) = LineDecl <$> f d
           plateElem f (LineExpr e) = LineExpr <$> plateExpr f e
 
           plateExpr :: Traversal' (Expr s) (Decl s)
-          plateExpr f (CallExpr e xs) = CallExpr <$> plateExpr f e <*> sequenceA (plateExpr f <$> xs)
+          plateExpr f (CallExpr e xs) = CallExpr <$> plateExpr f e <*> traverse (plateExpr f) xs
           plateExpr f (LoopExpr e b) = LoopExpr <$> plateExpr f e <*> plateBlock f b
           plateExpr f (ConditionalExpr c t e) = ConditionalExpr <$> plateExpr f c <*> plateBlock f t <*> plateBlock f e
           plateExpr _ e = pure e
   plate _ decl = pure decl
 
 instance Plated (Expr s) where
-  plate f' e' = plateExpr f' e'
+  plate = plateExpr
     where plateBlock :: Traversal' (Block s) (Expr s)
-          plateBlock f (Block xs) = Block <$> sequenceA (plateElem f <$> xs)
+          plateBlock f (Block xs) = Block <$> traverse (plateElem f) xs
 
           plateDecl :: Traversal' (Decl s) (Expr s)
           plateDecl f (Fn s p b) = Fn s p <$> plateBlock f b
@@ -143,7 +143,7 @@ instance Plated (Expr s) where
           plateElem f (LineExpr e) = LineExpr <$> f e
 
           plateExpr :: Traversal' (Expr s) (Expr s)
-          plateExpr f (CallExpr e xs) = CallExpr <$> f e <*> sequenceA (f <$> xs)
+          plateExpr f (CallExpr e xs) = CallExpr <$> f e <*> traverse f xs
           plateExpr f (LoopExpr e b) = LoopExpr <$> f e <*> plateBlock f b
           plateExpr f (ConditionalExpr c t e) = ConditionalExpr <$> f c <*> plateBlock f t <*> plateBlock f e
           plateExpr _ e = pure e
@@ -167,12 +167,12 @@ instance FromJSON (Line 'U) where
     ]
 
 _LineExpr :: Prism' (Line s) (Expr s)
-_LineExpr = prism' LineExpr $ (\case LineExpr e -> Just e
-                                     _          -> Nothing)
+_LineExpr = prism' LineExpr (\case LineExpr e -> Just e
+                                   _          -> Nothing)
 
 _LineDecl :: Prism' (Line s) (Decl s)
-_LineDecl = prism' LineDecl $ (\case LineDecl e -> Just e
-                                     _          -> Nothing)
+_LineDecl = prism' LineDecl (\case LineDecl e -> Just e
+                                   _          -> Nothing)
 
 newtype Block s = Block [Line s]
   deriving (Show, Generic)
