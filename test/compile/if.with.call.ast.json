@@ -1,0 +1,66 @@
+{
+    "body": [
+        {
+            "body": {
+                "body": [
+                    {
+                        "name": "x",
+                        "type": "Unqualified"
+                    }
+                ],
+                "type": "Block"
+            },
+            "name": "myfn",
+            "parameter": [
+                {
+                    "name": "x",
+                    "type": "Parameter"
+                }
+            ],
+            "type": "Fn"
+        },
+        {
+            "condition": {
+                "argument": [
+                    {
+                        "type": "Num",
+                        "value": 3
+                    }
+                ],
+                "fn": {
+                    "name": "myfn",
+                    "type": "Unqualified"
+                },
+                "type": "Call"
+            },
+            "else": {
+                "body": [
+                    {
+                        "argument": [],
+                        "fn": {
+                            "name": "y",
+                            "type": "Unqualified"
+                        },
+                        "type": "Call"
+                    }
+                ],
+                "type": "Block"
+            },
+            "then": {
+                "body": [
+                    {
+                        "argument": [],
+                        "fn": {
+                            "name": "x",
+                            "type": "Unqualified"
+                        },
+                        "type": "Call"
+                    }
+                ],
+                "type": "Block"
+            },
+            "type": "Conditional"
+        }
+    ],
+    "type": "Block"
+}
