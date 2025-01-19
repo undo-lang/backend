@@ -30,6 +30,7 @@ data Name :: NameStage -> Type where
   Local      :: String -> Name 'R
   Namespaced :: ModuleName -> String -> Name 'R
 deriving instance Show (Name s)
+deriving instance Eq (Name s)
 
 _Local :: Prism' (Name 'R) String
 _Local = prism' Local (\case Local n -> Just n
@@ -54,7 +55,7 @@ data Expr s
   | LoopExpr (Expr s) (Block s)
   | ConditionalExpr (Expr s) (Block s) (Block s)
   | NameExpr (Name s)
-  deriving (Show)
+  deriving (Eq, Show)
 
 _LitStr :: Prism' (Expr s) String
 _LitStr = prism' LitStr (\case LitStr s -> Just s
@@ -81,8 +82,8 @@ instance FromJSON (Expr 'U) where
         _        -> fail $ "Unknown expr type: " ++ type_
     ]
 
-newtype Parameter = Parameter String
-  deriving (Generic, Show)
+newtype Parameter = Parameter {unParameter :: String}
+  deriving (Generic, Eq, Show)
 
 instance FromJSON Parameter where
   parseJSON = withObject "parameter" $ \o -> do
@@ -91,20 +92,29 @@ instance FromJSON Parameter where
     Parameter <$> o .: "name"
 
 newtype ParameterList = ParameterList [Parameter]
-  deriving (Generic, FromJSON, Show)
+  deriving (Generic, FromJSON, Eq, Show)
 
 uncurry3 :: (a -> b -> c -> d) -> (a, b, c) -> d
 uncurry3 f (a, b, c) = f a b c
+
+data EnumVariant = EnumVariant String [String]
+  deriving (Eq, Show)
+
+instance FromJSON EnumVariant where
+  parseJSON = withObject "json variant" $ \o ->
+    EnumVariant <$> o .: "name" <*> o .: "parameter"
 
 data Decl s
   = Import ModuleName -- TODO other forms of import
   | Var String
   | Fn String ParameterList (Block s)
-  deriving (Show)
+  | Enum String [EnumVariant]
+  deriving (Eq, Show)
 
 _Import :: Prism' (Decl s) ModuleName
 _Import = prism' Import (\case Import m -> Just m
                                _        -> Nothing)
+
 _Var :: Prism' (Decl s) String
 _Var = prism' Var (\case Var s -> Just s
                          _     -> Nothing)
@@ -112,6 +122,10 @@ _Var = prism' Var (\case Var s -> Just s
 _Fn :: Prism' (Decl s) (String, ParameterList, Block s)
 _Fn = prism' (uncurry3 Fn) (\case (Fn s p b) -> Just (s, p, b)
                                   _          -> Nothing)
+
+_Enum :: Prism' (Decl s) (String, [EnumVariant])
+_Enum = prism' (uncurry Enum) (\case (Enum n xs) -> Just (n, xs)
+                                     _ -> Nothing)
 
 instance Plated (Decl 'R) where
   plate f (Fn s p b) = Fn s p <$> plateBlock f b
@@ -155,10 +169,11 @@ instance FromJSON (Decl 'U) where
       "Import" -> Import <$> o .: "value"
       "Var"    -> Var <$> o .: "name"
       "Fn"     -> Fn <$> o .: "name" <*> o .: "parameter" <*> o .: "body"
+      "Enum"   -> Enum <$> o .: "name" <*> o .: "variant"
       _        -> fail $ "Unknown decl type: " ++ type_
 
 data Line s = LineExpr (Expr s) | LineDecl (Decl s)
-  deriving (Show)
+  deriving (Eq, Show)
 
 instance FromJSON (Line 'U) where
   parseJSON = withObject "line" $ \o -> asum [
@@ -175,7 +190,7 @@ _LineDecl = prism' LineDecl (\case LineDecl e -> Just e
                                    _          -> Nothing)
 
 newtype Block s = Block [Line s]
-  deriving (Show, Generic)
+  deriving (Eq, Show, Generic)
 
 instance Wrapped (Block s)
 

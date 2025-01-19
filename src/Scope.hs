@@ -2,6 +2,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TemplateHaskell #-}
 module Scope
   ( resolveRoot
   , ScopeError
@@ -22,26 +23,36 @@ data ScopeError
   -- | DuplicateParameter String
   | NoSuchVariable String
   | NoSuchNamespace ModuleName
+  | DuplicateEnum String
+  -- TODO duplicate enum variant
   deriving (Show)
 
 type Aliases = Map.Map String ModuleName -- TODO implement those everywhere else
-type Scope = ([String], [ModuleName], Aliases)
-emptyScope :: Scope
-emptyScope = (["MAIN"], [ModuleName ["Prelude"]], Map.empty)
+type EnumVariants = Map.Map String Int -- fields
 
-names :: Lens' Scope [String]
-names = _1
-namespaces :: Lens' Scope [ModuleName]
-namespaces = _2
--- aliases :: Lens' Scope Aliases
--- aliases = _3
+data Scope = Scope
+  { _scopeNames :: [String],
+    _scopeNamespaces :: [ModuleName],
+    __scopeAliases :: Aliases,
+    _scopeEnums :: Map.Map String EnumVariants }
+
+$(makeLenses ''Scope)
+
+emptyScope :: Scope
+emptyScope = Scope ["MAIN"] [ModuleName ["Prelude"]] Map.empty Map.empty
 
 addName :: String -> Scope -> Scope
-addName = (names <>~) . pure
+addName = (scopeNames <>~) . pure
+
 -- addNames :: [String] -> Scope -> Scope
--- addNames = (names <>~)
+-- addNames = (scopeNames <>~)
+
 addNamespace :: ModuleName -> Scope -> Scope
-addNamespace = (namespaces <>~) . pure
+addNamespace = (scopeNamespaces <>~) . pure
+
+addEnum :: (String, [EnumVariant]) -> Scope -> Scope
+addEnum (name, variants) = scopeEnums.at name ?~ (Map.fromList (variantize <$> variants) :: EnumVariants)
+  where variantize (EnumVariant n xs) = (n, length xs)
 
 -- from https://stackoverflow.com/questions/11652809/how-to-implement-mapaccumm
 -- ( like https://hackage.haskell.org/package/Cabal-2.4.1.0/docs/src/Distribution.Utils.MapAccum.html )
@@ -74,10 +85,15 @@ resolveTree scope (Block lines) = Block <$> mapAccumM_ resolveLine hoistedScope 
           do newScope <- declNames scope $ name:extractParams params
              resolvedBody <- resolveTree newScope body_
              outerScope <- declName scope name
-             pure $ (LineDecl $ Fn name params resolvedBody, outerScope)
+             pure (LineDecl $ Fn name params resolvedBody, outerScope)
 
+        -- TODO import ADTs etc
         resolveLine scope (LineDecl (Import ns)) =
           (LineDecl $ Import ns,) <$> declNs scope ns
+
+        resolveLine scope (LineDecl (Enum n xs)) = do
+          newScope <- declEnum scope (n, xs)
+          pure (LineDecl (Enum n xs), newScope)
 
         resolveLine scope (LineExpr expr) =
           (, scope) . LineExpr <$> resolveExpr scope expr
@@ -103,19 +119,22 @@ resolveTree scope (Block lines) = Block <$> mapAccumM_ resolveLine hoistedScope 
 
         resolveName :: Resolver Name
         resolveName scope (Unresolved s) =
-          bimap NoSuchVariable Local $ eitherIf (`elem` topLevelFunctions ++ scope^.names) s
+          bimap NoSuchVariable Local $ eitherIf (`elem` topLevelFunctions ++ scope^.scopeNames) s
 
         resolveName scope (Prefixed m s) = -- TODO Aliases
-          bimap NoSuchNamespace (`Namespaced` s) $ eitherIf (`elem` scope^.namespaces) m
+          bimap NoSuchNamespace (`Namespaced` s) $ eitherIf (`elem` scope^.scopeNamespaces) m
 
         declNs :: Scope -> ModuleName -> Either ScopeError Scope -- TODO if an Alias already exists with that name, error
-        declNs scope = bimap DuplicateImport (`addNamespace` scope) . eitherUnless (`elem` scope^.namespaces)
+        declNs scope = bimap DuplicateImport (`addNamespace` scope) . eitherUnless (`elem` scope^.scopeNamespaces)
 
         declName :: Scope -> String -> Either ScopeError Scope
-        declName scope = bimap DuplicateVariable (`addName` scope) . eitherUnless (`elem` scope^.names)
+        declName scope = bimap DuplicateVariable (`addName` scope) . eitherUnless (`elem` scope^.scopeNames)
 
         declNames :: Scope -> [String] -> Either ScopeError Scope
         declNames = foldM declName
+
+        declEnum :: Scope -> (String, [EnumVariant]) -> Either ScopeError Scope
+        declEnum scope = bimap (DuplicateEnum . fst) (`addEnum` scope) . eitherIf (\(n, _) -> Map.member n (scope^.scopeEnums))
 
 eitherIf :: (a -> Bool) -> a -> Either a a
 eitherIf comp a = if comp a then Right a else Left a
@@ -125,5 +144,3 @@ eitherUnless comp a = if comp a then Left a else Right a
 
 extractParams :: ParameterList -> [String]
 extractParams (ParameterList params) = unParameter <$> params
-  where unParameter :: Parameter -> String
-        unParameter (Parameter p) = p
