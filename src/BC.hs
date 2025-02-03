@@ -8,6 +8,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TemplateHaskell #-}
 module BC
     ( gen
     , Module
@@ -17,16 +18,16 @@ module BC
 --import Control.Monad.State (StateT(..), runStateT)
 import GHC.Generics
 --import Debug.Trace
-import Control.Lens ((^.), Lens', lens, (<>~), (<<+=), (<>=), at, (?~), (%=), uses)
+import Control.Lens ((^.), Lens', (<>~), (<<+=), (<>=), at, (?~), (%=), uses)
 import Control.Lens.Combinators (toListOf, _1, _2, _3)
+import Control.Lens.TH (makeLenses)
 import Control.Lens.Fold (folded, (^..))
 import Control.Lens.Plated (cosmos) -- (children, universe, plate)
---import Control.Lens.Wrapped -- XXX not used anymore?
 import Data.Foldable (traverse_)
 --import Data.Functor (($>))
 import Data.Aeson
 import Control.Monad.State
-import Data.List (nub, elemIndex)
+import Data.List (elemIndex)
 import Data.Kind (Type)
 import qualified Data.Map as Map
 
@@ -85,31 +86,25 @@ type StringTable = [String]
 
 type LabelMap = Map.Map LabelIdx Int
 data Builder = Builder
-  { lastLabel :: Int
-  , instrs :: [Instruction 'L]
-  , resolvedLabels :: LabelMap
+  { _lastLabel :: Int
+  , _instrs :: [Instruction 'L]
+  , _resolvedLabels :: LabelMap
   }
+
+$(makeLenses ''Builder)
+
 emptyBuilder :: Builder
-emptyBuilder = Builder { lastLabel = 0, instrs = [], resolvedLabels = Map.empty }
-
-_lastLabel :: Lens' Builder Int
-_lastLabel = lens lastLabel (\s a -> s { lastLabel = a })
-
-_instrs :: Lens' Builder [Instruction 'L]
-_instrs = lens instrs (\s a -> s { instrs = a })
-
-_resolvedLabels :: Lens' Builder LabelMap
-_resolvedLabels = lens resolvedLabels (\s a -> s { resolvedLabels = a })
+emptyBuilder = Builder 0 [] Map.empty
 
 generateLabel :: MonadState Builder m => m LabelIdx
-generateLabel = LabelIdx <$> (_lastLabel <<+= 1)
+generateLabel = LabelIdx <$> (lastLabel <<+= 1)
 
 appendInstr :: MonadState Builder m => Instruction 'L -> m ()
-appendInstr = (_instrs <>=) . pure
+appendInstr = (instrs <>=) . pure
 
 resolveLabel :: MonadState Builder m => LabelIdx -> m ()
-resolveLabel labelIdx = do i <- uses _instrs length
-                           _resolvedLabels %= (at labelIdx ?~ i)
+resolveLabel labelIdx = do i <- uses instrs length
+                           resolvedLabels %= (at labelIdx ?~ i)
 
 jump :: LabelIdx -> Instruction 'L
 jump = Jump . Label
@@ -145,7 +140,7 @@ emptyScope :: Scope
 emptyScope = ([], [], [])
 
 resolveBuilder :: ModuleName -> Builder -> Either BCError [Instruction 'O]
-resolveBuilder moduleName builder = traverse resolve $ instrs builder
+resolveBuilder moduleName builder = traverse resolve $ builder^.instrs
   where resolve :: Instruction 'L -> Either BCError (Instruction 'O)
         resolve (Jump loc) = Jump <$> resolveLoc loc
         resolve (JumpUnless loc) = JumpUnless <$> resolveLoc loc
@@ -160,15 +155,12 @@ resolveBuilder moduleName builder = traverse resolve $ instrs builder
           else Left $ UnresolvedModule mod
 
         resolveLoc :: JumpData 'L -> Either BCError (JumpData 'O)
-        resolveLoc (Label idx) = case Map.lookup idx labels of
+        resolveLoc (Label idx) = case Map.lookup idx (builder^.resolvedLabels) of
             Just o -> Right $ Offset o
             Nothing -> Left $ LabelNotResolved idx
 
-        labels :: LabelMap
-        labels = resolvedLabels builder
-
-compileFn :: ModuleName -> [String] -> StringTable -> BcFn -> Either BCError [Instruction 'O]
-compileFn moduleName fnNames strings (_, params, blk) =
+compileFn :: ModuleName -> [String] -> BcFn -> Either BCError [Instruction 'O]
+compileFn moduleName fnNames (_, params, blk) =
   let scope = extractParams params `addLocals` emptyScope
   in resolveBuilder moduleName $ execState (compileBlock scope blk) emptyBuilder
   where compileBlock :: Scope -> Block 'R -> BuilderState
@@ -177,9 +169,7 @@ compileFn moduleName fnNames strings (_, params, blk) =
           in traverse_ (compileExpr newScope) $ lines^..folded._LineExpr
 
         compileExpr :: Scope -> Expr 'R -> BuilderState
-        compileExpr _ (LitStr s) = case s `elemIndex` strings of
-          Just idx -> appendInstr $ PushString idx
-          Nothing -> error $ "ICE: String not found in table: " ++ s
+        compileExpr _ (InternedStr idx) = appendInstr $ PushString idx
         compileExpr _ (LitNum n) =
           appendInstr $ PushInt n
         compileExpr scope (CallExpr f xs) = do
@@ -193,9 +183,9 @@ compileFn moduleName fnNames strings (_, params, blk) =
           appendInstr $ jumpUnless elseLabel
           compileBlock scope then_
           appendInstr $ jump endLabel
-          resolveLabel $ elseLabel
+          resolveLabel elseLabel
           compileBlock scope else_
-          resolveLabel $ endLabel
+          resolveLabel endLabel
         compileExpr scope (LoopExpr cond blk) = do
           startLabel <- generateLabel
           endLabel <- generateLabel
@@ -222,15 +212,15 @@ compileFn moduleName fnNames strings (_, params, blk) =
         --                      let label = Label $ LabelIdx labelIdx
         --                      appendInstr $ Jump label
 
-compileFns :: ModuleName -> StringTable -> [BcFn] -> Either BCError (Map.Map String [Instruction 'O])
-compileFns moduleName strings fns = Map.fromList <$> sequence (compile <$> fns)
+compileFns :: ModuleName -> [BcFn] -> Either BCError (Map.Map String [Instruction 'O])
+compileFns moduleName fns = Map.fromList <$> traverse compile fns
   where name (n, _, _) = n
         fnNames = name <$> fns
-        compile o = (name o,) <$> compileFn moduleName fnNames strings o
+        compile o = (name o,) <$> compileFn moduleName fnNames o
 
 -- Moves Leftover top-level code to a function called Main
 reformatBlock :: Block 'R -> [Decl 'R]
-reformatBlock (Block lines) = (genMain exprs):decls
+reformatBlock (Block lines) = genMain exprs:decls
   where exprs :: [Expr 'R]
         exprs = lines^..folded._LineExpr
 
@@ -240,23 +230,12 @@ reformatBlock (Block lines) = (genMain exprs):decls
         genMain :: [Expr 'R] -> Decl 'R
         genMain exprs = Fn "MAIN" (ParameterList []) (Block $ LineExpr <$> exprs)
 
--- Returns all strings. Right now, doesn't keep Namespaced names (need to mangle them)
-getStrs :: BcFn -> [String]
-getStrs (s, _, (Block lines)) = [s] ++ litStrs exprs ++ names exprs
-  where exprs :: [Expr 'R]
-        exprs = lines^..folded._LineExpr
-
-        litStrs = toListOf $ traverse . cosmos . _LitStr
-
-        names = toListOf $ traverse . cosmos . _NameExpr . _Local
-
-gen :: ModuleName -> Block 'R -> Either BCError Module
-gen name block = do
+gen :: ModuleName -> [String] -> Block 'R -> Either BCError Module
+gen name strings block = do
   let decls = reformatBlock block
   let fns = getFunctions decls
   let imports = getImports decls
-  let strings = nub $ concat (getStrs <$> fns)
-  functions <- compileFns name strings fns
+  functions <- compileFns name fns
   pure Module
        { name = name
        , dependencies = imports

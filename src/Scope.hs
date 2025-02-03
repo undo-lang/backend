@@ -5,8 +5,9 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Scope
   ( resolveRoot
-  , ScopeError
   , extractParams
+  , allStrings
+  , ScopeError
   ) where
 
 import Control.Monad (foldM)
@@ -14,6 +15,7 @@ import qualified Data.Map as Map
 import Control.Monad.State (StateT(..), evalStateT)
 import Control.Lens
 import Data.Kind (Type)
+import Data.List (elemIndex)
 
 import AST
 
@@ -25,6 +27,7 @@ data ScopeError
   | NoSuchNamespace ModuleName
   | DuplicateEnum String
   -- TODO duplicate enum variant
+  | StringNotComputed
   deriving (Show)
 
 type Aliases = Map.Map String ModuleName -- TODO implement those everywhere else
@@ -60,16 +63,19 @@ addEnum (name, variants) = scopeEnums.at name ?~ (Map.fromList (variantize <$> v
 mapAccumM_ :: (Monad m, Functor m, Traversable t) => (a -> b -> m (c, a)) -> a -> t b -> m (t c)
 mapAccumM_ f = flip (evalStateT . traverse (StateT . flip f))
 
-resolveRoot :: Block 'U -> Either ScopeError (Block 'R)
-resolveRoot = resolveTree emptyScope -- XXX should probably make sure we don't shadow functions... should it?
+resolveRoot :: [String] -> Block 'U -> Either ScopeError (Block 'R)
+resolveRoot stringTable = resolveTree stringTable emptyScope -- XXX should probably make sure we don't shadow functions... should it?
 
 type Resolver (s :: NameStage -> Type)
   = Scope -> s 'U -> Either ScopeError (s 'R)
 type ResolverWithScope (s :: NameStage -> Type)
   = Scope -> s 'U -> Either ScopeError (s 'R, Scope)
 
-resolveTree :: Resolver Block
-resolveTree scope (Block lines) = Block <$> mapAccumM_ resolveLine hoistedScope lines
+allStrings :: Block 'U -> [String]
+allStrings (Block lines) = lines^..folded._LineExpr._LitStr
+
+resolveTree :: [String] -> Resolver Block
+resolveTree allStrings scope (Block lines) = Block <$> mapAccumM_ resolveLine hoistedScope lines
   where topLevelFunctions :: [String]
         topLevelFunctions = lines^..folded._LineDecl._Fn._1
 
@@ -83,7 +89,7 @@ resolveTree scope (Block lines) = Block <$> mapAccumM_ resolveLine hoistedScope 
         resolveLine scope (LineDecl (Fn name params body_)) =
           -- TODO addName `name` in case it's not a global function, for local ones
           do newScope <- declNames scope $ name:extractParams params
-             resolvedBody <- resolveTree newScope body_
+             resolvedBody <- resolveTree allStrings newScope body_
              outerScope <- declName scope name
              pure (LineDecl $ Fn name params resolvedBody, outerScope)
 
@@ -103,16 +109,18 @@ resolveTree scope (Block lines) = Block <$> mapAccumM_ resolveLine hoistedScope 
           CallExpr <$> resolveExpr scope fn <*> traverse (resolveExpr scope) args
 
         resolveExpr scope (LoopExpr cond blk) = -- TODO extract variable decl(s) from `cond`?
-          LoopExpr <$> resolveExpr scope cond <*> resolveTree scope blk
+          LoopExpr <$> resolveExpr scope cond <*> resolveTree allStrings scope blk
 
         resolveExpr scope (ConditionalExpr cond then_ else_) = -- TODO extract variable decl(s) from `cond`?
-          ConditionalExpr <$> resolveExpr scope cond <*> resolveTree scope then_ <*> resolveTree scope else_
+          ConditionalExpr <$> resolveExpr scope cond <*> resolveTree allStrings scope then_ <*> resolveTree allStrings scope else_
 
         resolveExpr scope (NameExpr n) =
           NameExpr <$> resolveName scope n
 
         resolveExpr _ (LitStr s) =
-          Right $ LitStr s
+          case s `elemIndex` allStrings of
+            Just i -> Right $ InternedStr i
+            Nothing -> Left StringNotComputed
 
         resolveExpr _ (LitNum i) =
           Right $ LitNum i

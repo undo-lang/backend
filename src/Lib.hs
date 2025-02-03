@@ -12,7 +12,7 @@ import Data.Aeson (eitherDecode)
 import Data.List.Split (splitOn)
 
 import AST
-import Scope (resolveRoot, ScopeError)
+import Scope (resolveRoot, allStrings, ScopeError)
 import BC (gen, Module, BCError)
 
 data Error
@@ -25,14 +25,15 @@ compile :: String -> BS.ByteString -> Either Error Module
 compile rawModuleName contents = do
   let moduleName = ModuleName $ splitOn "." rawModuleName
   block <- traceShowId $ readBlock contents
-  resolved <- traceShowId $ readRoot block
-  genBC moduleName resolved
+  let strings = allStrings block
+  resolved <- traceShowId $ readRoot strings block
+  genBC moduleName strings resolved
 
 readBlock :: BS.ByteString -> Either Error (Block 'U)
 readBlock = over _Left ParseError . eitherDecode
 
-readRoot :: Block 'U -> Either Error (Block 'R)
-readRoot = over _Left ScopingError . resolveRoot
+readRoot :: [String] -> Block 'U -> Either Error (Block 'R)
+readRoot strings = over _Left ScopingError . resolveRoot strings
 
-genBC :: ModuleName -> Block 'R -> Either Error Module
-genBC moduleName block = over _Left BytecodeError $ gen moduleName block
+genBC :: ModuleName -> [String] -> Block 'R -> Either Error Module
+genBC moduleName strings block = over _Left BytecodeError $ gen moduleName strings block

@@ -23,7 +23,9 @@ import Control.Lens.Type (Traversal') -- TMP
 newtype ModuleName = ModuleName [String]
   deriving (Generic, FromJSON, ToJSON, Eq, Show)
 
+-- TODO refactor string table to use this GADT scheme (so we know indices are correct by construction)
 data NameStage = U | R
+
 data Name :: NameStage -> Type where
   Unresolved :: String -> Name 'U
   Prefixed   :: ModuleName -> String -> Name 'U
@@ -48,16 +50,18 @@ instance FromJSON (Name 'U) where
       "Qualified"   -> Prefixed <$> o .: "module" <*> o .: "name"
       _             -> fail $ "Unhandled name type: " ++ type_
 
-data Expr s
-  = LitStr String
-  | LitNum Int
-  | CallExpr (Expr s) [Expr s]
-  | LoopExpr (Expr s) (Block s)
-  | ConditionalExpr (Expr s) (Block s) (Block s)
-  | NameExpr (Name s)
-  deriving (Eq, Show)
+data Expr s where
+  LitStr :: String -> Expr 'U
+  InternedStr :: Int -> Expr 'R
+  LitNum :: Int -> Expr s
+  CallExpr :: (Expr s) -> [Expr s] -> Expr s
+  LoopExpr :: (Expr s) -> (Block s) -> Expr s
+  ConditionalExpr :: (Expr s) -> (Block s) -> (Block s) -> Expr s
+  NameExpr :: (Name s) -> Expr s
+deriving instance Show (Expr s)
+deriving instance Eq (Expr s)
 
-_LitStr :: Prism' (Expr s) String
+_LitStr :: Prism' (Expr 'U) String
 _LitStr = prism' LitStr (\case LitStr s -> Just s
                                _        -> Nothing)
 
