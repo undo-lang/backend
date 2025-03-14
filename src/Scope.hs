@@ -125,8 +125,8 @@ resolveTree allStrings scope (Block lines) = Block <$> mapAccumM_ resolveLine ho
         resolveExpr _ (LitNum i) =
           Right $ LitNum i
 
-        resolveExpr scope (MatchExpr bs) =
-          MatchExpr <$> traverse (resolveMatchBranch scope) bs
+        resolveExpr scope (MatchExpr topic bs) =
+          MatchExpr <$> resolveExpr scope topic <*> traverse (resolveMatchBranch scope) bs
 
         resolveMatchBranch :: Resolver MatchBranch
         resolveMatchBranch scope (MatchBranch s b) = MatchBranch s <$> resolveTree allStrings scope b

@@ -202,8 +202,9 @@ compileFn moduleName fnNames (_, params, blk) =
             Nothing -> error $ "local not found. want: " ++ name ++ ", got = " ++ show (scope^._locals)
         compileExpr _ (NameExpr (Namespaced ns name)) =
           appendInstr $ LoadName (UnresolvedModuleName ns) name
-        compileExpr scope (MatchExpr bs) = do
+        compileExpr scope (MatchExpr topic bs) = do
           endLabel <- generateLabel
+          compileExpr scope topic -- TODO local or something...
           traverse_ (compileMatchBranch scope endLabel) bs
           resolveLabel endLabel
 
@@ -217,7 +218,7 @@ compileFn moduleName fnNames (_, params, blk) =
 
         -- TODO break, continue etc
 
-        getDecls lines = (lines^..folded._LineDecl._Var)
+        getDecls lines = lines^..folded._LineDecl._Var
 
         --compileLine :: Line 'R -> BuilderState
         --compileLine line = do labelIdx <- generateLabel
