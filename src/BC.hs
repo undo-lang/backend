@@ -199,9 +199,21 @@ compileFn moduleName fnNames (_, params, blk) =
           Just idx -> appendInstr $ LoadLocal idx
           Nothing -> case name `elemIndex` fnNames of
             Just _ -> appendInstr $ LoadGlobal name --LoadName CurrentModuleName name
-            Nothing -> error $ "local not found. want: `" ++ name ++ "`, got = " ++ show (scope^._locals)
+            Nothing -> error $ "local not found. want: " ++ name ++ ", got = " ++ show (scope^._locals)
         compileExpr _ (NameExpr (Namespaced ns name)) =
           appendInstr $ LoadName (UnresolvedModuleName ns) name
+        compileExpr scope (MatchExpr bs) = do
+          endLabel <- generateLabel
+          traverse_ (compileMatchBranch scope endLabel) bs
+          resolveLabel endLabel
+
+        compileMatchBranch scope end (MatchBranch _s b) = do
+          -- TODO generate the `if`, jump to `noMatch` if it fails
+          noMatch <- generateLabel
+          compileBlock scope b
+          appendInstr $ jump end
+          resolveLabel noMatch
+
 
         -- TODO break, continue etc
 

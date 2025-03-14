@@ -125,6 +125,12 @@ resolveTree allStrings scope (Block lines) = Block <$> mapAccumM_ resolveLine ho
         resolveExpr _ (LitNum i) =
           Right $ LitNum i
 
+        resolveExpr scope (MatchExpr bs) =
+          MatchExpr <$> traverse (resolveMatchBranch scope) bs
+
+        resolveMatchBranch :: Resolver MatchBranch
+        resolveMatchBranch scope (MatchBranch s b) = MatchBranch s <$> resolveTree allStrings scope b
+
         resolveName :: Resolver Name
         resolveName scope (Unresolved s) =
           bimap NoSuchVariable Local $ eitherIf (`elem` topLevelFunctions ++ scope^.scopeNames) s
