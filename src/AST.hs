@@ -50,6 +50,24 @@ instance FromJSON (Name 'U) where
       "Qualified"   -> Prefixed <$> o .: "module" <*> o .: "name"
       _             -> fail $ "Unhandled name type: " ++ type_
 
+data MatchSubject
+  = MatchSubjectConstructor String [MatchSubject]
+  deriving (Eq, Show)
+
+instance FromJSON MatchSubject where
+  parseJSON = withObject "match subject" $ \o -> do
+    type_ <- o .: "type"
+    case type_ of
+      "Constructor" -> MatchSubjectConstructor <$> o .: "constructor" <*> o .: "sub"
+      _ -> fail $ "Unknown match subject type: " ++ type_
+
+data MatchBranch s = MatchBranch MatchSubject (Block s)
+  deriving (Eq, Show)
+
+instance FromJSON (MatchBranch 'U) where
+  parseJSON = withObject "match branch" $ \o -> do
+    MatchBranch <$> o .: "subject" <*> o .: "block"
+
 data Expr s where
   LitStr :: String -> Expr 'U
   InternedStr :: Int -> Expr 'R
@@ -58,6 +76,7 @@ data Expr s where
   LoopExpr :: (Expr s) -> (Block s) -> Expr s
   ConditionalExpr :: (Expr s) -> (Block s) -> (Block s) -> Expr s
   NameExpr :: (Name s) -> Expr s
+  MatchExpr :: [MatchBranch s] -> Expr s
 deriving instance Show (Expr s)
 deriving instance Eq (Expr s)
 
@@ -83,6 +102,7 @@ instance FromJSON (Expr 'U) where
         "Num"    -> LitNum <$> o .: "value"
         "Call"   -> CallExpr <$> o .: "fn" <*> o .: "argument"
         "Conditional" -> ConditionalExpr <$> o .: "condition" <*> o .: "then" <*> o .: "else"
+        "Match" -> MatchExpr <$> o .: "branch"
         _        -> fail $ "Unknown expr type: " ++ type_
     ]
 
