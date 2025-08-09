@@ -30,9 +30,5 @@
     "name": [
         "simple",
         "call"
-    ],
-    "strings": [
-        "MAIN",
-        "Hello world!"
     ]
 }

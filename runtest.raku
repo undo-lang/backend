@@ -14,19 +14,23 @@ for @specs -> % (:$name, :$is-error) {
   await $proc.start;
 
   my $generated = "$name.undo-bc".IO;
+  LEAVE try { unlink $generated; }
 
   if $is-error {
     ok $generated ~~ :!e, "Error file for $name exists";
     my $expected = slurp "test/compile/$name.error";
     ok $error ~~ /$error/, "Error for $name matches the expected message";
   } else {
-    ok $generated ~~ :e, "BC file for $name exists";
-    my %generated = from-json(slurp $generated);
+    if $generated ~~ :e {
+      pass "BC file for $name exists";
+      my %generated = from-json(slurp $generated);
 
-    my $bc-file = "test/compile/$name.bc.json";
-    my %expected-bc = from-json(slurp $bc-file);
-    is-deeply %generated, %expected-bc, "Correct BC generated for $name";
-    unlink $generated;
+      my $bc-file = "test/compile/$name.bc.json";
+      my %expected-bc = from-json(slurp $bc-file);
+      is-deeply %generated, %expected-bc, "Correct BC generated for $name";
+    } else {
+      fail "Expected to succeed, but errored instead: $error";
+    }
   }
 }
 

@@ -44,6 +44,8 @@ data BCError
 
 newtype LabelIdx = LabelIdx Int
   deriving (Show, Generic, Eq, Ord)
+newtype RegisterIdx = RegisterIdx Int
+  deriving (Show, Generic, Eq, Ord, ToJSON, FromJSON)
 deriving instance ToJSON LabelIdx
 data BCStage = L | O -- Label / Offset
 data JumpData :: BCStage -> Type where
@@ -51,7 +53,6 @@ data JumpData :: BCStage -> Type where
   Offset :: Int -> JumpData 'O
 deriving instance Show (JumpData s)
 instance ToJSON (JumpData 'O) where
-  -- TODO ToJSON (JumpData 'O)?
   toJSON (Offset x) = object [ "offset" .= x ]
 
 data BCModuleName :: BCStage -> Type where
@@ -64,13 +65,19 @@ instance ToJSON (BCModuleName 'O) where
 
 data Instruction s
  = PushInt Int
- | PushString Int
+ | PushString String
  | Call Int
  | JumpUnless (JumpData s)
  | Jump (JumpData s)
  | LoadLocal Int
  | LoadGlobal String
+ -- XXX StoreLocal
+ | LoadRegister RegisterIdx
+ | StoreRegister RegisterIdx
  | LoadName (BCModuleName s) String
+ | Instantiate (BCModuleName s) String String -- Module ADT Ctor
+ | IsVariant (BCModuleName s) String String -- Module ADT Ctor
+ | Field (BCModuleName s) String String String -- Module ADT Ctor Field
   deriving (Show, Generic)
 deriving instance ToJSON (Instruction 'O) -- ???
 
@@ -82,11 +89,10 @@ getImports = toListOf $ traverse . cosmos . _Import
 getFunctions :: [Decl 'R] -> [BcFn]
 getFunctions decls = decls^..folded._Fn
 
-type StringTable = [String] 
-
 type LabelMap = Map.Map LabelIdx Int
 data Builder = Builder
   { _lastLabel :: Int
+  , _lastRegister :: Int
   , _instrs :: [Instruction 'L]
   , _resolvedLabels :: LabelMap
   }
@@ -94,7 +100,7 @@ data Builder = Builder
 $(makeLenses ''Builder)
 
 emptyBuilder :: Builder
-emptyBuilder = Builder 0 [] Map.empty
+emptyBuilder = Builder 0 0 [] Map.empty
 
 generateLabel :: MonadState Builder m => m LabelIdx
 generateLabel = LabelIdx <$> (lastLabel <<+= 1)
@@ -106,6 +112,15 @@ resolveLabel :: MonadState Builder m => LabelIdx -> m ()
 resolveLabel labelIdx = do i <- uses instrs length
                            resolvedLabels %= (at labelIdx ?~ i)
 
+allocateRegister :: MonadState Builder m => m RegisterIdx
+allocateRegister = RegisterIdx <$> (lastRegister <<+= 1)
+
+registerSave :: MonadState Builder m => m RegisterIdx
+registerSave = do
+  register <- allocateRegister
+  appendInstr $ StoreRegister register
+  pure register
+
 jump :: LabelIdx -> Instruction 'L
 jump = Jump . Label
 jumpUnless :: LabelIdx -> Instruction 'L
@@ -113,7 +128,7 @@ jumpUnless = JumpUnless . Label
 
 type BuilderState = State Builder ()
 
--- (break, continue, locals)
+-- (break, continue, locals, registers)
 type Scope = ([LabelIdx], [LabelIdx], [String])
 _breakTargets :: Lens' Scope [LabelIdx]
 _breakTargets = _1
@@ -144,15 +159,15 @@ resolveBuilder moduleName builder = traverse resolve $ builder^.instrs
   where resolve :: Instruction 'L -> Either BCError (Instruction 'O)
         resolve (Jump loc) = Jump <$> resolveLoc loc
         resolve (JumpUnless loc) = JumpUnless <$> resolveLoc loc
+        resolve (LoadName (UnresolvedModuleName mod) v) = if True -- TODO if mod `elem` imports
+          then Right $ LoadName (ResolvedModuleName mod) v
+          else Left $ UnresolvedModule mod
         resolve (PushInt x) = Right $ PushInt x
         resolve (PushString x) = Right $ PushString x
         resolve (Call x) = Right $ Call x
         resolve (LoadLocal x) = Right $ LoadLocal x
         resolve (LoadGlobal x) = Right $ LoadGlobal x
         resolve (LoadName CurrentModuleName v) = Right $ LoadName (ResolvedModuleName moduleName) v
-        resolve (LoadName (UnresolvedModuleName mod) v) = if True -- TODO if mod `elem` imports
-          then Right $ LoadName (ResolvedModuleName mod) v
-          else Left $ UnresolvedModule mod
 
         resolveLoc :: JumpData 'L -> Either BCError (JumpData 'O)
         resolveLoc (Label idx) = case Map.lookup idx (builder^.resolvedLabels) of
@@ -169,7 +184,8 @@ compileFn moduleName fnNames (_, params, blk) =
           in traverse_ (compileExpr newScope) $ lines^..folded._LineExpr
 
         compileExpr :: Scope -> Expr 'R -> BuilderState
-        compileExpr _ (InternedStr idx) = appendInstr $ PushString idx
+        compileExpr _ (LitStr s) =
+          appendInstr $ PushString s
         compileExpr _ (LitNum n) =
           appendInstr $ PushInt n
         compileExpr scope (CallExpr f xs) = do
@@ -204,11 +220,15 @@ compileFn moduleName fnNames (_, params, blk) =
           appendInstr $ LoadName (UnresolvedModuleName ns) name
         compileExpr scope (MatchExpr topic bs) = do
           endLabel <- generateLabel
-          compileExpr scope topic -- TODO local or something...
-          traverse_ (compileMatchBranch scope endLabel) bs
+          failLabel <- generateLabel
+          compileExpr scope topic
+          reg <- registerSave
+          traverse_ (compileMatchBranch scope endLabel reg) bs
+          resolveLabel failLabel
+          -- TODO error instr
           resolveLabel endLabel
 
-        compileMatchBranch scope end (MatchBranch _s b) = do
+        compileMatchBranch scope end reg (MatchBranch (MatchSubjectConstructor s _vars) b) = do
           -- TODO generate the `if`, jump to `noMatch` if it fails
           noMatch <- generateLabel
           compileBlock scope b
@@ -243,8 +263,8 @@ reformatBlock (Block lines) = genMain exprs:decls
         genMain :: [Expr 'R] -> Decl 'R
         genMain exprs = Fn "MAIN" (ParameterList []) (Block $ LineExpr <$> exprs)
 
-gen :: ModuleName -> [String] -> Block 'R -> Either BCError Module
-gen name strings block = do
+gen :: ModuleName -> Block 'R -> Either BCError Module
+gen name block = do
   let decls = reformatBlock block
   let fns = getFunctions decls
   let imports = getImports decls
@@ -252,13 +272,11 @@ gen name strings block = do
   pure Module
        { name = name
        , dependencies = imports
-       , functions = functions
-       , strings = strings }
+       , functions = functions }
 
 data Module = Module -- TODO version?
   { name :: ModuleName
   , dependencies :: [ModuleName] -- this should include all `Import`s (dupe imports = error)
   , functions :: Map.Map String [Instruction 'O]
-  , strings :: StringTable
   }
   deriving (Show, Generic, ToJSON)

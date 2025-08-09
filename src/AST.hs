@@ -23,7 +23,6 @@ import Control.Lens.Type (Traversal') -- TMP
 newtype ModuleName = ModuleName [String]
   deriving (Generic, FromJSON, ToJSON, Eq, Show)
 
--- TODO refactor string table to use this GADT scheme (so we know indices are correct by construction)
 data NameStage = U | R
 
 data Name :: NameStage -> Type where
@@ -69,8 +68,7 @@ instance FromJSON (MatchBranch 'U) where
     MatchBranch <$> o .: "subject" <*> o .: "block"
 
 data Expr s where
-  LitStr :: String -> Expr 'U
-  InternedStr :: Int -> Expr 'R
+  LitStr :: String -> Expr s
   LitNum :: Int -> Expr s
   CallExpr :: (Expr s) -> [Expr s] -> Expr s
   LoopExpr :: (Expr s) -> (Block s) -> Expr s
