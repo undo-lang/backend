@@ -1,47 +1,49 @@
 {
-    "body": [
+  "type": "Block",
+  "body": [
+    {
+      "type": "Fn",
+      "name": "a",
+      "body": {
+        "type": "Block",
+        "body": [
+          {
+            "name": "x",
+            "type": "Unqualified"
+          }
+        ]
+      },
+      "parameter": [
         {
-            "body": {
-                "body": [
-                    {
-                        "name": "x",
-                        "type": "Unqualified"
-                    }
-                ],
-                "type": "Block"
-            },
-            "name": "a",
-            "parameter": [
-                {
-                    "name": "x",
-                    "type": "Parameter"
-                }
-            ],
-            "type": "Fn"
-        },
-        {
-            "argument": [
-                {
-                    "argument": [
-                        {
-                            "type": "Num",
-                            "value": 1
-                        }
-                    ],
-                    "fn": {
-                        "name": "a",
-                        "type": "Unqualified"
-                    },
-                    "type": "Call"
-                }
-            ],
-            "fn": {
-                "name": "print",
-                "module": ["Prelude"],
-                "type": "Qualified"
-            },
-            "type": "Call"
+          "name": "x",
+          "type": "Parameter"
         }
-    ],
-    "type": "Block"
+      ]
+    },
+    {
+      "type": "Call",
+      "argument": [
+        {
+          "type": "Call",
+          "argument": [
+            {
+              "type": "Num",
+              "value": 1
+            }
+          ],
+          "fn": {
+            "name": "a",
+            "type": "Unqualified"
+          }
+        }
+      ],
+      "fn": {
+        "name": "print",
+        "module": [
+          "Prelude"
+        ],
+        "type": "Qualified"
+      }
+    }
+  ]
 }

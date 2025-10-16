@@ -1,36 +1,38 @@
 {
-    "dependencies": [
-      ["Foo"]
-    ],
-    "functions": {
-        "MAIN": [
-            {
-                "tag": "PushString",
-                "contents": "Hello world!"
-            },
-            {
-                "tag": "PushInt",
-                "contents": 42
-            },
-            {
-                "tag": "LoadName",
-                "contents": [
-                    {
-                        "module": [
-                            "Foo"
-                        ]
-                    },
-                    "print"
-                ]
-            },
-            {
-                "tag": "Call",
-                "contents": 2
-            }
-        ]
-    },
-    "name": [
-        "imported",
-        "name"
+  "dependencies": [
+    [
+      "Foo"
     ]
+  ],
+  "functions": {
+    "MAIN": [
+      {
+        "tag": "PushString",
+        "contents": "Hello world!"
+      },
+      {
+        "tag": "PushInt",
+        "contents": 42
+      },
+      {
+        "tag": "LoadName",
+        "contents": [
+          {
+            "module": [
+              "Foo"
+            ]
+          },
+          "print"
+        ]
+      },
+      {
+        "tag": "Call",
+        "contents": 2
+      }
+    ]
+  },
+  "name": [
+    "imported",
+    "name"
+  ]
 }

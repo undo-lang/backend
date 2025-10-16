@@ -82,12 +82,12 @@ resolveTree scope (Block lines) = Block <$> mapAccumM_ resolveLine hoistedScope 
         resolveLine scope (LineDecl (Var name)) =
           (LineDecl $ Var name,) <$> declName scope name
 
-        resolveLine scope (LineDecl (Fn name params body_)) =
+        resolveLine scope (LineDecl (Fn name params body_)) = do
           -- TODO addName `name` in case it's not a global function, for local ones
-          do newScope <- declNames scope $ name:extractParams params
-             resolvedBody <- resolveTree newScope body_
-             outerScope <- declName scope name
-             pure (LineDecl $ Fn name params resolvedBody, outerScope)
+          newScope <- declNames scope $ name:extractParams params
+          resolvedBody <- resolveTree newScope body_
+          outerScope <- declName scope name
+          pure (LineDecl $ Fn name params resolvedBody, outerScope)
 
         -- TODO import ADTs etc
         resolveLine scope (LineDecl (Import ns)) =

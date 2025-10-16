@@ -1,30 +1,32 @@
 {
-    "body": [
+  "body": [
+    {
+      "type": "Import",
+      "value": [
+        "Foo"
+      ]
+    },
+    {
+      "argument": [
         {
-            "type": "Import",
-            "value": [
-                "Foo"
-            ]
+          "type": "String",
+          "value": "Hello world!"
         },
         {
-            "argument": [
-                {
-                    "type": "String",
-                    "value": "Hello world!"
-                },
-                {
-                    "type": "Num",
-                    "value": 42
-                }
-            ],
-            "fn": {
-                "name": "print",
-                "module": ["Foo"],
-                "type": "Qualified"
-            },
-            "type": "Call"
+          "type": "Num",
+          "value": 42
         }
-    ],
-    "type": "Block"
+      ],
+      "fn": {
+        "name": "print",
+        "module": [
+          "Foo"
+        ],
+        "type": "Qualified"
+      },
+      "type": "Call"
+    }
+  ],
+  "type": "Block"
 }
 

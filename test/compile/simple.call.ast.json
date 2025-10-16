@@ -1,24 +1,26 @@
 {
-    "type": "Block",
-    "body": [
+  "type": "Block",
+  "body": [
+    {
+      "type": "Call",
+      "argument": [
         {
-            "type": "Call",
-            "argument": [
-                {
-                    "type": "String",
-                    "value": "Hello world!"
-                },
-                {
-                    "type": "Num",
-                    "value": 42
-                }
-            ],
-            "fn": {
-                "name": "print",
-                "module": ["Prelude"],
-                "type": "Qualified"
-            }
+          "type": "String",
+          "value": "Hello world!"
+        },
+        {
+          "type": "Num",
+          "value": 42
         }
-    ]
+      ],
+      "fn": {
+        "name": "print",
+        "module": [
+          "Prelude"
+        ],
+        "type": "Qualified"
+      }
+    }
+  ]
 }
 

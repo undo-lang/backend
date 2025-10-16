@@ -1,34 +1,34 @@
 {
-    "dependencies": [],
-    "functions": {
-        "MAIN": [
-            {
-                "tag": "PushString",
-                "contents": "Hello world!"
-            },
-            {
-                "tag": "PushInt",
-                "contents": 42
-            },
-            {
-                "tag": "LoadName",
-                "contents": [
-                    {
-                        "module": [
-                            "Prelude"
-                        ]
-                    },
-                    "print"
-                ]
-            },
-            {
-                "tag": "Call",
-                "contents": 2
-            }
+  "dependencies": [],
+  "functions": {
+    "MAIN": [
+      {
+        "tag": "PushString",
+        "contents": "Hello world!"
+      },
+      {
+        "tag": "PushInt",
+        "contents": 42
+      },
+      {
+        "tag": "LoadName",
+        "contents": [
+          {
+            "module": [
+              "Prelude"
+            ]
+          },
+          "print"
         ]
-    },
-    "name": [
-        "simple",
-        "call"
+      },
+      {
+        "tag": "Call",
+        "contents": 2
+      }
     ]
+  },
+  "name": [
+    "simple",
+    "call"
+  ]
 }
