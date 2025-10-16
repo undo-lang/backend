@@ -3,7 +3,11 @@ use JSON::Fast;
 use Test;
 
 my @specs = from-json(slurp 'test/compile/spec.json');
-for @specs -> % (:$name, :$is-error) {
+for @specs -> % (:$name, :$is-error, :$disabled) {
+  if $disabled {
+    skip "Skipping $name";
+    next;
+  }
   my $ast-file = "test/compile/$name.ast.json";
   ok $ast-file.IO ~~ :e, "AST file for $name exists";
 

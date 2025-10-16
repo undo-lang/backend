@@ -6,7 +6,7 @@
         "MAIN": [
             {
                 "tag": "PushString",
-                "contents": 1
+                "contents": "Hello world!"
             },
             {
                 "tag": "PushInt",

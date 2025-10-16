@@ -9,6 +9,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE LambdaCase #-}
+
 module BC
     ( gen
     , Module
@@ -30,6 +32,7 @@ import Control.Monad.State
 import Data.List (elemIndex)
 import Data.Kind (Type)
 import qualified Data.Map as Map
+import Data.Foldable (for_)
 
 import AST
 import Scope (extractParams)
@@ -128,7 +131,7 @@ jumpUnless = JumpUnless . Label
 
 type BuilderState = State Builder ()
 
--- (break, continue, locals, registers)
+-- (break, continue, locals)
 type Scope = ([LabelIdx], [LabelIdx], [String])
 _breakTargets :: Lens' Scope [LabelIdx]
 _breakTargets = _1
@@ -159,15 +162,23 @@ resolveBuilder moduleName builder = traverse resolve $ builder^.instrs
   where resolve :: Instruction 'L -> Either BCError (Instruction 'O)
         resolve (Jump loc) = Jump <$> resolveLoc loc
         resolve (JumpUnless loc) = JumpUnless <$> resolveLoc loc
-        resolve (LoadName (UnresolvedModuleName mod) v) = if True -- TODO if mod `elem` imports
-          then Right $ LoadName (ResolvedModuleName mod) v
-          else Left $ UnresolvedModule mod
+        resolve (LoadName m v) = LoadName <$> resolveModuleName m <*> pure v
         resolve (PushInt x) = Right $ PushInt x
         resolve (PushString x) = Right $ PushString x
         resolve (Call x) = Right $ Call x
         resolve (LoadLocal x) = Right $ LoadLocal x
         resolve (LoadGlobal x) = Right $ LoadGlobal x
-        resolve (LoadName CurrentModuleName v) = Right $ LoadName (ResolvedModuleName moduleName) v
+        resolve (LoadRegister r) = Right $ LoadRegister r
+        resolve (StoreRegister r) = Right $ StoreRegister r
+        resolve (Instantiate ns e c) = Instantiate <$> resolveModuleName ns <*> pure e <*> pure c
+        resolve (IsVariant ns e c) = IsVariant <$> resolveModuleName ns <*> pure e <*> pure c
+        resolve (Field ns e c f) = Field <$> resolveModuleName ns <*> pure e <*> pure c <*> pure f
+
+        resolveModuleName :: BCModuleName 'L -> Either BCError (BCModuleName 'O)
+        resolveModuleName CurrentModuleName = Right $ ResolvedModuleName moduleName
+        resolveModuleName (UnresolvedModuleName mod) = if True -- TODO if mod `elem` imports
+          then Right $ ResolvedModuleName mod
+          else Left $ UnresolvedModule mod
 
         resolveLoc :: JumpData 'L -> Either BCError (JumpData 'O)
         resolveLoc (Label idx) = case Map.lookup idx (builder^.resolvedLabels) of
@@ -223,18 +234,37 @@ compileFn moduleName fnNames (_, params, blk) =
           failLabel <- generateLabel
           compileExpr scope topic
           reg <- registerSave
-          traverse_ (compileMatchBranch scope endLabel reg) bs
+          -- Prepare labels for each case, so we can jump to the next when the match fails
+          labels <- sequence $ replicate (length bs) generateLabel
+          let startLabels = [Nothing] ++ fmap Just labels
+              endLabels = labels ++ [failLabel]
+          traverse_ (compileMatchBranch scope endLabel reg) (zip3 bs startLabels endLabels)
           resolveLabel failLabel
-          -- TODO error instr
+          -- TODO error instr? prelude error fn?
           resolveLabel endLabel
 
-        compileMatchBranch scope end reg (MatchBranch (MatchSubjectConstructor s _vars) b) = do
-          -- TODO generate the `if`, jump to `noMatch` if it fails
-          noMatch <- generateLabel
+        compileMatchBranch scope end reg ((MatchBranch pattern b), startLabel, nextBranch) = do
+          for_ startLabel resolveLabel -- Resolve our "Start label" unless we're the 1st branch
+          compilePattern scope reg nextBranch pattern
           compileBlock scope b
           appendInstr $ jump end
-          resolveLabel noMatch
 
+        compilePattern :: Scope -> RegisterIdx -> LabelIdx -> MatchSubject 'R -> BuilderState
+        compilePattern scope reg nextBranch = \case
+          MatchSubjectConstructor (ResolvedVariant mn e c) vars -> do
+            appendInstr $ LoadRegister reg
+            appendInstr $ IsVariant (UnresolvedModuleName mn) e c
+            appendInstr $ jumpUnless nextBranch
+            for_ vars $ \(fieldName, var) -> do
+              appendInstr $ LoadRegister reg
+              appendInstr $ Field (UnresolvedModuleName mn) e c fieldName
+              fieldReg <- registerSave
+              compilePattern scope fieldReg nextBranch var
+          MatchSubjectVariable name -> do
+            appendInstr $ LoadRegister reg
+            case name `elemIndex` (scope^._locals) of
+              Just idx -> appendInstr $ LoadLocal idx
+              Nothing -> error $ "match-created local not found. want: " ++ name ++ ", got = " ++ show (scope^._locals)
 
         -- TODO break, continue etc
 

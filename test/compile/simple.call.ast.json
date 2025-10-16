@@ -1,6 +1,8 @@
 {
+    "type": "Block",
     "body": [
         {
+            "type": "Call",
             "argument": [
                 {
                     "type": "String",
@@ -15,10 +17,8 @@
                 "name": "print",
                 "module": ["Prelude"],
                 "type": "Qualified"
-            },
-            "type": "Call"
+            }
         }
-    ],
-    "type": "Block"
+    ]
 }
 

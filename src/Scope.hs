@@ -14,7 +14,6 @@ import qualified Data.Map as Map
 import Control.Monad.State (StateT(..), evalStateT)
 import Control.Lens
 import Data.Kind (Type)
-import Data.List (elemIndex)
 
 import AST
 
@@ -25,6 +24,7 @@ data ScopeError
   | NoSuchVariable String
   | NoSuchNamespace ModuleName
   | DuplicateEnum String
+  | NoSuchVariant String
   -- TODO duplicate enum variant
   deriving (Show)
 
@@ -35,12 +35,13 @@ data Scope = Scope
   { _scopeNames :: [String],
     _scopeNamespaces :: [ModuleName],
     __scopeAliases :: Aliases,
-    _scopeEnums :: Map.Map String EnumVariants }
+    _scopeEnums :: Map.Map String EnumVariants,
+    _scopeVariants :: Map.Map String (ModuleName, String) } -- Variant Name -> Module+ctor
 
 $(makeLenses ''Scope)
 
 emptyScope :: Scope
-emptyScope = Scope ["MAIN"] [ModuleName ["Prelude"]] Map.empty Map.empty
+emptyScope = Scope ["MAIN"] [ModuleName ["Prelude"]] Map.empty Map.empty Map.empty
 
 addName :: String -> Scope -> Scope
 addName = (scopeNames <>~) . pure
@@ -122,7 +123,22 @@ resolveTree scope (Block lines) = Block <$> mapAccumM_ resolveLine hoistedScope 
           MatchExpr <$> resolveExpr scope topic <*> traverse (resolveMatchBranch scope) bs
 
         resolveMatchBranch :: Resolver MatchBranch
-        resolveMatchBranch scope (MatchBranch s b) = MatchBranch s <$> resolveTree scope b
+        resolveMatchBranch scope (MatchBranch s b) = do
+          let names = matchNames s
+          innerScope <- declNames scope names
+          MatchBranch <$> resolveMatchSubject scope s <*> resolveTree innerScope b
+
+        resolveMatchSubject :: Resolver MatchSubject
+        resolveMatchSubject scope (MatchSubjectConstructor n subs) =
+          MatchSubjectConstructor <$> resolveVariantName scope n <*> traverse (sequence . fmap (resolveMatchSubject scope)) subs
+        resolveMatchSubject _ (MatchSubjectVariable s) =
+          pure $ MatchSubjectVariable s
+
+        resolveVariantName :: Resolver VariantName
+        resolveVariantName scope (UnqualifiedVariant v) =
+          case scope^.scopeVariants.at v of
+            Just (mn, ctor) -> Right $ ResolvedVariant mn ctor v
+            Nothing -> Left $ NoSuchVariant v
 
         resolveName :: Resolver Name
         resolveName scope (Unresolved s) =
@@ -151,3 +167,8 @@ eitherUnless comp a = if comp a then Left a else Right a
 
 extractParams :: ParameterList -> [String]
 extractParams (ParameterList params) = unParameter <$> params
+
+-- TODO refactor this to use Plated
+matchNames :: MatchSubject s -> [String]
+matchNames (MatchSubjectConstructor _ subs) = subs >>= matchNames . snd
+matchNames (MatchSubjectVariable v) = [v]

@@ -28,6 +28,7 @@ data NameStage = U | R
 data Name :: NameStage -> Type where
   Unresolved :: String -> Name 'U
   Prefixed   :: ModuleName -> String -> Name 'U
+  -- XXX remove Local, always Namespaced, just fill in current module name? remove LoadLocal?
   Local      :: String -> Name 'R
   Namespaced :: ModuleName -> String -> Name 'R
 deriving instance Show (Name s)
@@ -49,18 +50,33 @@ instance FromJSON (Name 'U) where
       "Qualified"   -> Prefixed <$> o .: "module" <*> o .: "name"
       _             -> fail $ "Unhandled name type: " ++ type_
 
-data MatchSubject
-  = MatchSubjectConstructor String [MatchSubject]
+data VariantName :: NameStage -> Type where
+  -- TODO Namespaced etc?
+  UnqualifiedVariant :: String -> VariantName 'U
+  ResolvedVariant :: ModuleName -> String -> String -> VariantName 'R
+deriving instance Show (VariantName s)
+deriving instance Eq (VariantName s)
+
+instance FromJSON (VariantName 'U) where
+  parseJSON = withObject "variant name" $ \o -> do
+    type_ <- o .: "type"
+    case type_ of
+      "Unqualified" -> UnqualifiedVariant <$> o .: "name"
+      _             -> fail $ "Unhandled variant name type: " ++ type_
+
+data MatchSubject s
+  = MatchSubjectConstructor (VariantName s) [(String, MatchSubject s)]
+  | MatchSubjectVariable String
   deriving (Eq, Show)
 
-instance FromJSON MatchSubject where
+instance FromJSON (MatchSubject 'U) where
   parseJSON = withObject "match subject" $ \o -> do
     type_ <- o .: "type"
     case type_ of
       "Constructor" -> MatchSubjectConstructor <$> o .: "constructor" <*> o .: "sub"
       _ -> fail $ "Unknown match subject type: " ++ type_
 
-data MatchBranch s = MatchBranch MatchSubject (Block s)
+data MatchBranch s = MatchBranch (MatchSubject s) (Block s)
   deriving (Eq, Show)
 
 instance FromJSON (MatchBranch 'U) where
