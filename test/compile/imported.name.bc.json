@@ -34,5 +34,7 @@
   "name": [
     "imported",
     "name"
-  ]
+  ],
+  "adts": {},
+  "expectedAdts": []
 }

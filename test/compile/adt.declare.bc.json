@@ -1,0 +1,12 @@
+{
+  "dependencies": [],
+  "functions": {
+    "MAIN": []
+  },
+  "name": [
+    "adt",
+    "declare"
+  ],
+  "adts": {},
+  "expectedAdts": []
+}

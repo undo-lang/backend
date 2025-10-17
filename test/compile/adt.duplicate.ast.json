@@ -1,0 +1,33 @@
+{
+  "type": "Block",
+  "body": [
+    {
+      "type": "Enum",
+      "name": "Option",
+      "variant": [
+        {
+          "name": "Just",
+          "parameter": []
+        },
+        {
+          "name": "Nothing",
+          "parameter": []
+        }
+      ]
+    },
+    {
+      "type": "Enum",
+      "name": "Option",
+      "variant": [
+        {
+          "name": "Just",
+          "parameter": []
+        },
+        {
+          "name": "Nothing",
+          "parameter": []
+        }
+      ]
+    }
+  ]
+}

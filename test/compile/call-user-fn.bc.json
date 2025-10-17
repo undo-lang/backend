@@ -39,6 +39,8 @@
   },
   "name": [
     "call-user-fn"
-  ]
+  ],
+  "adts": {},
+  "expectedAdts": []
 }
 

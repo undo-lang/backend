@@ -13,7 +13,24 @@
     "is-error": true
   },
   {
-    "name": "adt",
-    "disabled": true
+    "name": "adt.declare"
+  },
+  {
+    "name": "adt.match",
+    "disabled": "NYI"
+  },
+  {
+    "name": "adt.duplicate",
+    "is-error": true
+  },
+  {
+    "name": "adt.duplicate-variant",
+    "is-error": true,
+    "disabled": "that check is NYI"
+  },
+  {
+    "name": "adt.duplicate-field",
+    "is-error": true,
+    "disabled": "that check is NYI"
   }
 ]

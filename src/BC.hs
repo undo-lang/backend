@@ -10,6 +10,10 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+--{-# LANGUAGE DisambiguateRecordFields #-}
+--{-# LANGUAGE NoFieldSelectors #-}
 
 module BC
     ( gen
@@ -296,17 +300,34 @@ reformatBlock (Block lines) = genMain exprs:decls
 gen :: ModuleName -> Block 'R -> Either BCError Module
 gen name block = do
   let decls = reformatBlock block
-  let fns = getFunctions decls
-  let imports = getImports decls
+      fns = getFunctions decls
+      dependencies = getImports decls
+      adts = Map.fromList []
+      expectedAdts = []
+
   functions <- compileFns name fns
-  pure Module
-       { name = name
-       , dependencies = imports
-       , functions = functions }
+  pure Module { name, dependencies, functions, adts, expectedAdts }
+
+data ADTVariant = ADTVariant
+  { name :: String
+  , elements :: [String] }
+  deriving (Show, Generic, ToJSON)
+
+data ExpectedADT = ExpectedADT
+  { module_ :: ModuleName
+  , adtName :: String
+  , variants :: [ADTVariant] }
+  deriving (Show)
+
+instance ToJSON ExpectedADT where
+  toJSON ExpectedADT {module_, adtName, variants} =
+    object ["module" .= module_, "name" .= adtName, "variants" .= variants]
 
 data Module = Module -- TODO version?
   { name :: ModuleName
   , dependencies :: [ModuleName] -- this should include all `Import`s (dupe imports = error)
   , functions :: Map.Map String [Instruction 'O]
+  , adts :: Map.Map String [ADTVariant]
+  , expectedAdts :: [ExpectedADT]
   }
   deriving (Show, Generic, ToJSON)

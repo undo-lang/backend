@@ -24,6 +24,7 @@ data ScopeError
   | NoSuchVariable String
   | NoSuchNamespace ModuleName
   | DuplicateEnum String
+  | DuplicateEnumVariant String
   | NoSuchVariant String
   -- TODO duplicate enum variant
   deriving (Show)
@@ -74,6 +75,7 @@ resolveTree :: Resolver Block
 resolveTree scope (Block lines) = Block <$> mapAccumM_ resolveLine hoistedScope lines
   where topLevelFunctions :: [String]
         topLevelFunctions = lines^..folded._LineDecl._Fn._1
+        -- TODO toplevelNames, split between "locals" and "module-local names"
 
         --hoistedScope = topLevelFunctions `addNames` scope
         hoistedScope = scope
@@ -157,7 +159,7 @@ resolveTree scope (Block lines) = Block <$> mapAccumM_ resolveLine hoistedScope 
         declNames = foldM declName
 
         declEnum :: Scope -> (String, [EnumVariant]) -> Either ScopeError Scope
-        declEnum scope = bimap (DuplicateEnum . fst) (`addEnum` scope) . eitherIf (\(n, _) -> Map.member n (scope^.scopeEnums))
+        declEnum scope = bimap (DuplicateEnum . fst) (`addEnum` scope) . eitherUnless (\(n, _) -> Map.member n (scope^.scopeEnums))
 
 eitherIf :: (a -> Bool) -> a -> Either a a
 eitherIf comp a = if comp a then Right a else Left a
