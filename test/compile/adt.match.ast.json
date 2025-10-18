@@ -7,11 +7,61 @@
       "variant": [
         {
           "name": "Just",
-          "parameter": ["value"]
+          "parameter": [
+            "value"
+          ]
         },
         {
           "name": "Nothing",
           "parameter": []
+        }
+      ]
+    },
+    {
+      "type": "Match",
+      "topic": {
+        "type": "String",
+        "value": "TODO instantiate"
+      },
+      "branch": [
+        {
+          "subject": {
+            "type": "Constructor",
+            "constructor": {
+              "type": "Unqualified",
+              "name": "Just"
+            },
+            "sub": [
+              [
+                "value",
+                {
+                  "type": "Variable",
+                  "name": "x"
+                }
+              ]
+            ]
+          },
+          "block": {
+            "type": "Block",
+            "body": [
+              {
+                "type": "Call",
+                "argument": [
+                  {
+                    "type": "Unqualified",
+                    "name": "x"
+                  }
+                ],
+                "fn": {
+                  "name": "print",
+                  "module": [
+                    "Prelude"
+                  ],
+                  "type": "Qualified"
+                }
+              }
+            ]
+          }
         }
       ]
     }

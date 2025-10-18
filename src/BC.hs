@@ -84,8 +84,8 @@ data Instruction s
  | JumpUnless (JumpData s)
  | Jump (JumpData s)
  | LoadLocal Int
+ | StoreLocal Int
  | LoadGlobal String
- -- XXX StoreLocal
  | LoadRegister RegisterIdx
  | StoreRegister RegisterIdx
  | LoadName (BCModuleName s) String
@@ -211,6 +211,7 @@ resolveBuilder moduleName builder = traverse resolve $ builder^.instrs
         resolve (PushString x) = Right $ PushString x
         resolve (Call x) = Right $ Call x
         resolve (LoadLocal x) = Right $ LoadLocal x
+        resolve (StoreLocal x) = Right $ StoreLocal x
         resolve (LoadGlobal x) = Right $ LoadGlobal x
         resolve (LoadRegister r) = Right $ LoadRegister r
         resolve (StoreRegister r) = Right $ StoreRegister r
@@ -311,7 +312,7 @@ compileFn moduleName fnNames (_, params, blk) =
           MatchSubjectVariable name -> do
             appendInstr $ LoadRegister reg
             case name `elemIndex` (scope^._locals) of
-              Just idx -> appendInstr $ LoadLocal idx
+              Just idx -> appendInstr $ StoreLocal idx
               Nothing -> throwError $ ICE $ MatchLocalNotResolved name (scope^._locals)
 
         -- TODO break, continue etc
