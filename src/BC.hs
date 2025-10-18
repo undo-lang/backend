@@ -66,7 +66,7 @@ data BCModuleName :: BCStage -> Type where
   UnresolvedModuleName :: ModuleName -> BCModuleName 'L
   CurrentModuleName :: BCModuleName 'L
   ResolvedModuleName :: ModuleName -> BCModuleName 'O
-deriving instance Show (BCModuleName  s)
+deriving instance Show (BCModuleName s)
 instance ToJSON (BCModuleName 'O) where
   toJSON (ResolvedModuleName (ModuleName m)) = object [ "module" .= m ]
 
@@ -90,11 +90,43 @@ deriving instance ToJSON (Instruction 'O) -- ???
 
 type BcFn = (String, ParameterList, Block 'R)
 
+data ADTVariant = ADTVariant
+  { name :: String
+  , elements :: [String] }
+  deriving (Show, Generic, ToJSON)
+
+data ExpectedADT = ExpectedADT
+  { module_ :: ModuleName
+  , adtName :: String
+  , variants :: [ADTVariant] }
+  deriving (Show)
+
+instance ToJSON ExpectedADT where
+  toJSON ExpectedADT {module_, adtName, variants} =
+    object ["module" .= module_, "name" .= adtName, "variants" .= variants]
+
+data Module = Module -- TODO version?
+  { name :: ModuleName
+  , dependencies :: [ModuleName] -- this should include all `Import`s (dupe imports = error)
+  , functions :: Map.Map String [Instruction 'O]
+  , adts :: Map.Map String [ADTVariant]
+  , expectedAdts :: [ExpectedADT]
+  }
+  deriving (Show, Generic, ToJSON)
+
+
 getImports :: [Decl 'R] -> [ModuleName]
 getImports = toListOf $ traverse . cosmos . _Import
 
 getFunctions :: [Decl 'R] -> [BcFn]
 getFunctions decls = decls^..folded._Fn
+
+-- Globally namespaced enums (XXX should check that there are no overlaps)
+getEnums :: [Decl 'R] -> Map.Map String [ADTVariant]
+getEnums = fmap (fmap remap) . Map.fromList . toListOf (traverse . cosmos . _Enum)
+  where
+  -- map to a new type that's serializable
+    remap (EnumVariant v es) = ADTVariant v es
 
 type LabelMap = Map.Map LabelIdx Int
 data Builder = Builder
@@ -155,7 +187,7 @@ addContinueTarget = (_breakTargets <>~) . pure
 addLocals   :: [String] -> Scope -> Scope
 addLocals = (_locals <>~)
 
-addBreakAndContinueTarget   :: LabelIdx -> Scope -> Scope
+addBreakAndContinueTarget  :: LabelIdx -> Scope -> Scope
 addBreakAndContinueTarget label scope = label `addBreakTarget` (label `addContinueTarget` scope)
 
 emptyScope :: Scope
@@ -302,32 +334,8 @@ gen name block = do
   let decls = reformatBlock block
       fns = getFunctions decls
       dependencies = getImports decls
-      adts = Map.fromList []
+      adts = getEnums decls
       expectedAdts = []
 
   functions <- compileFns name fns
   pure Module { name, dependencies, functions, adts, expectedAdts }
-
-data ADTVariant = ADTVariant
-  { name :: String
-  , elements :: [String] }
-  deriving (Show, Generic, ToJSON)
-
-data ExpectedADT = ExpectedADT
-  { module_ :: ModuleName
-  , adtName :: String
-  , variants :: [ADTVariant] }
-  deriving (Show)
-
-instance ToJSON ExpectedADT where
-  toJSON ExpectedADT {module_, adtName, variants} =
-    object ["module" .= module_, "name" .= adtName, "variants" .= variants]
-
-data Module = Module -- TODO version?
-  { name :: ModuleName
-  , dependencies :: [ModuleName] -- this should include all `Import`s (dupe imports = error)
-  , functions :: Map.Map String [Instruction 'O]
-  , adts :: Map.Map String [ADTVariant]
-  , expectedAdts :: [ExpectedADT]
-  }
-  deriving (Show, Generic, ToJSON)

@@ -230,7 +230,7 @@ _LineDecl = prism' LineDecl (\case LineDecl e -> Just e
 newtype Block s = Block [Line s]
   deriving (Eq, Show, Generic)
 
-instance Wrapped (Block s)
+instance Wrapped (Block s) -- why?
 
 instance FromJSON (Block 'U) where
   parseJSON = withObject "block" $ \o -> do

@@ -7,6 +7,19 @@
     "adt",
     "declare"
   ],
-  "adts": {},
+  "adts": {
+    "Option": [
+      {
+        "name": "Just",
+        "elements": [
+          "value"
+        ]
+      },
+      {
+        "name": "Nothing",
+        "elements": []
+      }
+    ]
+  },
   "expectedAdts": []
 }
