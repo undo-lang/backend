@@ -1,0 +1,106 @@
+{
+  "adts": {
+    "Option": [
+      {
+        "elements": [
+          "value"
+        ],
+        "name": "Just"
+      },
+      {
+        "elements": [],
+        "name": "Nothing"
+      }
+    ]
+  },
+  "dependencies": [],
+  "expectedAdts": [],
+  "functions": {
+    "MAIN": [
+      {
+        "contents": "TODO instantiate",
+        "tag": "PushString"
+      },
+      {
+        "contents": 0,
+        "tag": "StoreRegister"
+      },
+      {
+        "contents": 0,
+        "tag": "LoadRegister"
+      },
+      {
+        "contents": [
+          {
+            "module": []
+          },
+          "Option",
+          "Just"
+        ],
+        "tag": "IsVariant"
+      },
+      {
+        "contents": {
+          "offset": 14
+        },
+        "tag": "JumpUnless"
+      },
+      {
+        "contents": 0,
+        "tag": "LoadRegister"
+      },
+      {
+        "contents": [
+          {
+            "module": []
+          },
+          "Option",
+          "Just",
+          "value"
+        ],
+        "tag": "Field"
+      },
+      {
+        "contents": 1,
+        "tag": "StoreRegister"
+      },
+      {
+        "contents": 1,
+        "tag": "LoadRegister"
+      },
+      {
+        "contents": 0,
+        "tag": "StoreLocal"
+      },
+      {
+        "contents": 0,
+        "tag": "LoadLocal"
+      },
+      {
+        "contents": [
+          {
+            "module": [
+              "Prelude"
+            ]
+          },
+          "print"
+        ],
+        "tag": "LoadName"
+      },
+      {
+        "contents": 1,
+        "tag": "Call"
+      },
+      {
+        "contents": {
+          "offset": 14
+        },
+        "tag": "Jump"
+      }
+    ]
+  },
+  "name": [
+    "adt",
+    "match"
+  ]
+}
