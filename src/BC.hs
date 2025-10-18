@@ -29,17 +29,23 @@ import Control.Lens.Combinators (toListOf, _1, _2, _3)
 import Control.Lens.TH (makeLenses)
 import Control.Lens.Fold (folded, (^..))
 import Control.Lens.Plated (cosmos) -- (children, universe, plate)
-import Data.Foldable (traverse_)
+import Data.Foldable (traverse_, for_)
+import Control.Monad (replicateM)
+import Control.Monad.Except (ExceptT, runExceptT, MonadError (throwError))
 --import Data.Functor (($>))
 import Data.Aeson
 import Control.Monad.State
 import Data.List (elemIndex)
 import Data.Kind (Type)
 import qualified Data.Map as Map
-import Data.Foldable (for_)
 
 import AST
 import Scope (extractParams)
+
+data InternalCompilerError
+    = LocalNotResolved String [String] -- (missing variable, list of available variables)
+    | MatchLocalNotResolved String [String] -- (missing variable, list of available variables)
+    deriving (Show)
 
 data BCError
  = DuplicateFunctionName String
@@ -47,6 +53,7 @@ data BCError
  | DuplicateFunctioNames
  | LabelNotResolved LabelIdx
  | UnresolvedModule ModuleName
+ | ICE InternalCompilerError
  deriving (Show)
 
 newtype LabelIdx = LabelIdx Int
@@ -165,7 +172,7 @@ jump = Jump . Label
 jumpUnless :: LabelIdx -> Instruction 'L
 jumpUnless = JumpUnless . Label
 
-type BuilderState = State Builder ()
+type BuilderState = ExceptT BCError (State Builder)
 
 -- (break, continue, locals)
 type Scope = ([LabelIdx], [LabelIdx], [String])
@@ -224,13 +231,15 @@ resolveBuilder moduleName builder = traverse resolve $ builder^.instrs
 compileFn :: ModuleName -> [String] -> BcFn -> Either BCError [Instruction 'O]
 compileFn moduleName fnNames (_, params, blk) =
   let scope = extractParams params `addLocals` emptyScope
-  in resolveBuilder moduleName $ execState (compileBlock scope blk) emptyBuilder
-  where compileBlock :: Scope -> Block 'R -> BuilderState
+  in case runState (runExceptT (compileBlock scope blk)) emptyBuilder of
+                    (Right (), builder) -> resolveBuilder moduleName builder
+                    (Left err, _) -> Left err
+  where compileBlock :: Scope -> Block 'R -> BuilderState ()
         compileBlock scope (Block lines) =
           let newScope = getDecls lines `addLocals` scope
           in traverse_ (compileExpr newScope) $ lines^..folded._LineExpr
 
-        compileExpr :: Scope -> Expr 'R -> BuilderState
+        compileExpr :: Scope -> Expr 'R -> BuilderState ()
         compileExpr _ (LitStr s) =
           appendInstr $ PushString s
         compileExpr _ (LitNum n) =
@@ -262,7 +271,7 @@ compileFn moduleName fnNames (_, params, blk) =
           Just idx -> appendInstr $ LoadLocal idx
           Nothing -> case name `elemIndex` fnNames of
             Just _ -> appendInstr $ LoadGlobal name --LoadName CurrentModuleName name
-            Nothing -> error $ "local not found. want: " ++ name ++ ", got = " ++ show (scope^._locals)
+            Nothing -> throwError $ ICE $ LocalNotResolved name (scope^._locals)
         compileExpr _ (NameExpr (Namespaced ns name)) =
           appendInstr $ LoadName (UnresolvedModuleName ns) name
         compileExpr scope (MatchExpr topic bs) = do
@@ -271,7 +280,7 @@ compileFn moduleName fnNames (_, params, blk) =
           compileExpr scope topic
           reg <- registerSave
           -- Prepare labels for each case, so we can jump to the next when the match fails
-          labels <- sequence $ replicate (length bs) generateLabel
+          labels <- replicateM (length bs) generateLabel
           let startLabels = [Nothing] ++ fmap Just labels
               endLabels = labels ++ [failLabel]
           traverse_ (compileMatchBranch scope endLabel reg) (zip3 bs startLabels endLabels)
@@ -285,7 +294,7 @@ compileFn moduleName fnNames (_, params, blk) =
           compileBlock scope b
           appendInstr $ jump end
 
-        compilePattern :: Scope -> RegisterIdx -> LabelIdx -> MatchSubject 'R -> BuilderState
+        compilePattern :: Scope -> RegisterIdx -> LabelIdx -> MatchSubject 'R -> BuilderState ()
         compilePattern scope reg nextBranch = \case
           MatchSubjectConstructor (ResolvedVariant mn e c) vars -> do
             appendInstr $ LoadRegister reg
@@ -300,13 +309,13 @@ compileFn moduleName fnNames (_, params, blk) =
             appendInstr $ LoadRegister reg
             case name `elemIndex` (scope^._locals) of
               Just idx -> appendInstr $ LoadLocal idx
-              Nothing -> error $ "match-created local not found. want: " ++ name ++ ", got = " ++ show (scope^._locals)
+              Nothing -> throwError $ ICE $ MatchLocalNotResolved name (scope^._locals)
 
         -- TODO break, continue etc
 
         getDecls lines = lines^..folded._LineDecl._Var
 
-        --compileLine :: Line 'R -> BuilderState
+        --compileLine :: Line 'R -> BuilderState ()
         --compileLine line = do labelIdx <- generateLabel
         --                      let label = Label $ LabelIdx labelIdx
         --                      appendInstr $ Jump label

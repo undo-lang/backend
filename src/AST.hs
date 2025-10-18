@@ -39,8 +39,8 @@ _Local = prism' Local (\case Local n -> Just n
                              _        -> Nothing)
 
 _Namespaced :: Prism' (Name 'R) (ModuleName, String)
-_Namespaced = prism' (uncurry Namespaced) (\case (Namespaced m s) -> Just (m, s)
-                                                 _        -> Nothing)
+_Namespaced = prism' (uncurry Namespaced) (\case Namespaced m s -> Just (m, s)
+                                                 _              -> Nothing)
 
 instance FromJSON (Name 'U) where
   parseJSON = withObject "name" $ \o -> do
@@ -74,6 +74,7 @@ instance FromJSON (MatchSubject 'U) where
     type_ <- o .: "type"
     case type_ of
       "Constructor" -> MatchSubjectConstructor <$> o .: "constructor" <*> o .: "sub"
+      "Variable" -> MatchSubjectVariable <$> o .: "name"
       _ -> fail $ "Unknown match subject type: " ++ type_
 
 data MatchBranch s = MatchBranch (MatchSubject s) (Block s)
@@ -86,10 +87,10 @@ instance FromJSON (MatchBranch 'U) where
 data Expr s where
   LitStr :: String -> Expr s
   LitNum :: Int -> Expr s
-  CallExpr :: (Expr s) -> [Expr s] -> Expr s
-  LoopExpr :: (Expr s) -> (Block s) -> Expr s
-  ConditionalExpr :: (Expr s) -> (Block s) -> (Block s) -> Expr s
-  NameExpr :: (Name s) -> Expr s
+  CallExpr :: Expr s -> [Expr s] -> Expr s
+  LoopExpr :: Expr s -> Block s -> Expr s
+  ConditionalExpr :: Expr s -> Block s -> Block s -> Expr s
+  NameExpr :: Name s -> Expr s
   MatchExpr :: Expr s -> [MatchBranch s] -> Expr s
 deriving instance Show (Expr s)
 deriving instance Eq (Expr s)
@@ -158,12 +159,12 @@ _Var = prism' Var (\case Var s -> Just s
                          _     -> Nothing)
 
 _Fn :: Prism' (Decl s) (String, ParameterList, Block s)
-_Fn = prism' (uncurry3 Fn) (\case (Fn s p b) -> Just (s, p, b)
-                                  _          -> Nothing)
+_Fn = prism' (uncurry3 Fn) (\case Fn s p b -> Just (s, p, b)
+                                  _        -> Nothing)
 
 _Enum :: Prism' (Decl s) (String, [EnumVariant])
-_Enum = prism' (uncurry Enum) (\case (Enum n xs) -> Just (n, xs)
-                                     _ -> Nothing)
+_Enum = prism' (uncurry Enum) (\case Enum n xs -> Just (n, xs)
+                                     _         -> Nothing)
 
 instance Plated (Decl 'R) where
   plate f (Fn s p b) = Fn s p <$> plateBlock f b
