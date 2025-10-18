@@ -154,6 +154,7 @@ generateLabel = LabelIdx <$> (lastLabel <<+= 1)
 appendInstr :: MonadState Builder m => Instruction 'L -> m ()
 appendInstr = (instrs <>=) . pure
 
+-- TODO fail if already resolved
 resolveLabel :: MonadState Builder m => LabelIdx -> m ()
 resolveLabel labelIdx = do i <- uses instrs length
                            resolvedLabels %= (at labelIdx ?~ i)
@@ -275,23 +276,25 @@ compileFn moduleName fnNames (_, params, blk) =
         compileExpr _ (NameExpr (Namespaced ns name)) =
           appendInstr $ LoadName (UnresolvedModuleName ns) name
         compileExpr scope (MatchExpr topic bs) = do
-          endLabel <- generateLabel
           failLabel <- generateLabel
+          endLabel <- generateLabel
           compileExpr scope topic
           reg <- registerSave
           -- Prepare labels for each case, so we can jump to the next when the match fails
-          labels <- replicateM (length bs) generateLabel
-          let startLabels = [Nothing] ++ fmap Just labels
+          labels <- replicateM (length bs - 1) generateLabel
+          let startLabels = Nothing:fmap Just labels
               endLabels = labels ++ [failLabel]
           traverse_ (compileMatchBranch scope endLabel reg) (zip3 bs startLabels endLabels)
           resolveLabel failLabel
           -- TODO error instr? prelude error fn?
           resolveLabel endLabel
 
-        compileMatchBranch scope end reg ((MatchBranch pattern b), startLabel, nextBranch) = do
+        compileMatchBranch scope end reg (MatchBranch pattern b, startLabel, nextBranch) = do
           for_ startLabel resolveLabel -- Resolve our "Start label" unless we're the 1st branch
-          compilePattern scope reg nextBranch pattern
-          compileBlock scope b
+          let innerScope = matchNames pattern `addLocals` scope
+          -- pass the new scope to the pattern so it knows where to bind
+          compilePattern innerScope reg nextBranch pattern
+          compileBlock innerScope b
           appendInstr $ jump end
 
         compilePattern :: Scope -> RegisterIdx -> LabelIdx -> MatchSubject 'R -> BuilderState ()

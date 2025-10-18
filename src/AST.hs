@@ -77,6 +77,11 @@ instance FromJSON (MatchSubject 'U) where
       "Variable" -> MatchSubjectVariable <$> o .: "name"
       _ -> fail $ "Unknown match subject type: " ++ type_
 
+-- TODO refactor this to use Plated
+matchNames :: MatchSubject s -> [String]
+matchNames (MatchSubjectConstructor _ subs) = subs >>= matchNames . snd
+matchNames (MatchSubjectVariable v) = [v]
+
 data MatchBranch s = MatchBranch (MatchSubject s) (Block s)
   deriving (Eq, Show)
 

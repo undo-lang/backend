@@ -171,8 +171,3 @@ eitherUnless comp a = if comp a then Left a else Right a
 
 extractParams :: ParameterList -> [String]
 extractParams (ParameterList params) = unParameter <$> params
-
--- TODO refactor this to use Plated
-matchNames :: MatchSubject s -> [String]
-matchNames (MatchSubjectConstructor _ subs) = subs >>= matchNames . snd
-matchNames (MatchSubjectVariable v) = [v]
