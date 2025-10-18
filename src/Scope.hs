@@ -54,7 +54,9 @@ addNamespace :: ModuleName -> Scope -> Scope
 addNamespace = (scopeNamespaces <>~) . pure
 
 addEnum :: (String, [EnumVariant]) -> Scope -> Scope
-addEnum (name, variants) = scopeEnums.at name ?~ (Map.fromList (variantize <$> variants) :: EnumVariants)
+addEnum (name, variants) scope =
+    foldl (\s (EnumVariant v _) -> scopeVariants.at v ?~ (ModuleName [], name) $ s)
+        (scopeEnums.at name ?~ Map.fromList (variantize <$> variants) $ scope) variants
   where variantize (EnumVariant n xs) = (n, length xs)
 
 -- from https://stackoverflow.com/questions/11652809/how-to-implement-mapaccumm
