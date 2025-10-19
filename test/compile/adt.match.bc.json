@@ -40,9 +40,7 @@
         "tag": "IsVariant"
       },
       {
-        "contents": {
-          "offset": 14
-        },
+        "contents": 14,
         "tag": "JumpUnless"
       },
       {
@@ -92,9 +90,7 @@
         "tag": "Call"
       },
       {
-        "contents": {
-          "offset": 14
-        },
+        "contents": 14,
         "tag": "Jump"
       }
     ]

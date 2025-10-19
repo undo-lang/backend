@@ -67,7 +67,7 @@ data JumpData :: BCStage -> Type where
   Offset :: Int -> JumpData 'O
 deriving instance Show (JumpData s)
 instance ToJSON (JumpData 'O) where
-  toJSON (Offset x) = object [ "offset" .= x ]
+  toJSON (Offset x) = toJSON x
 
 data BCModuleName :: BCStage -> Type where
   UnresolvedModuleName :: ModuleName -> BCModuleName 'L
