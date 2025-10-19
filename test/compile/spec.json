@@ -16,8 +16,7 @@
     "name": "adt.declare"
   },
   {
-    "name": "adt.match",
-    "disabled": "NYI"
+    "name": "adt.match"
   },
   {
     "name": "adt.duplicate",

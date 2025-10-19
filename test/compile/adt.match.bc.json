@@ -32,7 +32,7 @@
       {
         "contents": [
           {
-            "module": []
+            "module": ["adt", "match"]
           },
           "Option",
           "Just"
@@ -50,7 +50,7 @@
       {
         "contents": [
           {
-            "module": []
+            "module": ["adt", "match"]
           },
           "Option",
           "Just",

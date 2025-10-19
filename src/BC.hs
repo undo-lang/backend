@@ -221,6 +221,7 @@ resolveBuilder moduleName builder = traverse resolve $ builder^.instrs
 
         resolveModuleName :: BCModuleName 'L -> Either BCError (BCModuleName 'O)
         resolveModuleName CurrentModuleName = Right $ ResolvedModuleName moduleName
+        resolveModuleName (UnresolvedModuleName (ModuleName [])) = Right $ ResolvedModuleName moduleName
         resolveModuleName (UnresolvedModuleName mod) = if True -- TODO if mod `elem` imports
           then Right $ ResolvedModuleName mod
           else Left $ UnresolvedModule mod
