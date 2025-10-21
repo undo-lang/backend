@@ -150,7 +150,7 @@ instance FromJSON EnumVariant where
 
 data Decl s
   = Import ModuleName -- TODO other forms of import
-  | Var String
+  | Var String (Maybe (Expr s))
   | Fn String ParameterList (Block s)
   | Enum String [EnumVariant]
   deriving (Eq, Show)
@@ -159,9 +159,9 @@ _Import :: Prism' (Decl s) ModuleName
 _Import = prism' Import (\case Import m -> Just m
                                _        -> Nothing)
 
-_Var :: Prism' (Decl s) String
-_Var = prism' Var (\case Var s -> Just s
-                         _     -> Nothing)
+_Var :: Prism' (Decl s) (String, Maybe (Expr s))
+_Var = prism' (uncurry Var) (\case Var s i -> Just (s, i)
+                                   _       -> Nothing)
 
 _Fn :: Prism' (Decl s) (String, ParameterList, Block s)
 _Fn = prism' (uncurry3 Fn) (\case Fn s p b -> Just (s, p, b)
@@ -211,7 +211,7 @@ instance FromJSON (Decl 'U) where
     type_ <- o .: "type"
     case type_ of
       "Import" -> Import <$> o .: "value"
-      "Var"    -> Var <$> o .: "name"
+      "Var"    -> Var <$> o .: "name" <*> o .:? "init"
       "Fn"     -> Fn <$> o .: "name" <*> o .: "parameter" <*> o .: "body"
       "Enum"   -> Enum <$> o .: "name" <*> o .: "variant"
       _        -> fail $ "Unknown decl type: " ++ type_

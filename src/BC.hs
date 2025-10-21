@@ -240,7 +240,21 @@ compileFn moduleName fnNames (_, params, blk) =
   where compileBlock :: Scope -> Block 'R -> BuilderState ()
         compileBlock scope (Block lines) =
           let newScope = getDecls lines `addLocals` scope
-          in traverse_ (compileExpr newScope) $ lines^..folded._LineExpr
+          in traverse_ (compile newScope) $ lines^..folded
+
+        compile :: Scope -> Line 'R -> BuilderState ()
+        compile s (LineDecl decl) = compileDecl s decl
+        compile s (LineExpr expr) = compileExpr s expr
+
+        compileDecl :: Scope -> Decl 'R -> BuilderState ()
+        compileDecl scope (Var name mbInit) = for_ mbInit $ \init ->
+          case name `elemIndex` (scope^._locals) of
+            Just idx -> do
+              compileExpr scope init
+              appendInstr $ StoreLocal idx
+            Nothing -> throwError $ ICE $ LocalNotResolved name (scope^._locals)
+
+        compileDecl _ _ = pure ()
 
         compileExpr :: Scope -> Expr 'R -> BuilderState ()
         compileExpr _ (LitStr s) =
@@ -318,7 +332,7 @@ compileFn moduleName fnNames (_, params, blk) =
 
         -- TODO break, continue etc
 
-        getDecls lines = lines^..folded._LineDecl._Var
+        getDecls lines = fst <$> lines^..folded._LineDecl._Var
 
         --compileLine :: Line 'R -> BuilderState ()
         --compileLine line = do labelIdx <- generateLabel

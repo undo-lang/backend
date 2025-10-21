@@ -83,8 +83,10 @@ resolveTree scope (Block lines) = Block <$> mapAccumM_ resolveLine hoistedScope 
         hoistedScope = scope
 
         resolveLine :: ResolverWithScope Line
-        resolveLine scope (LineDecl (Var name)) =
-          (LineDecl $ Var name,) <$> declName scope name
+        resolveLine scope (LineDecl (Var name init)) = do
+          resolvedInit <- traverse (resolveExpr scope) init
+          newScope <- declName scope name
+          pure (LineDecl $ Var name resolvedInit, newScope)
 
         resolveLine scope (LineDecl (Fn name params body_)) = do
           -- TODO addName `name` in case it's not a global function, for local ones
