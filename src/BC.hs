@@ -37,15 +37,18 @@ import Data.Aeson
 import Control.Monad.State
 import Data.List (elemIndex)
 import Data.Kind (Type)
+import Data.List (sortBy)
+import Data.Ord (comparing)
 import qualified Data.Map as Map
 
 import AST
 import Scope (extractParams)
 
 data InternalCompilerError
-    = LocalNotResolved String [String] -- (missing variable, list of available variables)
-    | MatchLocalNotResolved String [String] -- (missing variable, list of available variables)
-    deriving (Show)
+  = LocalNotResolved String [String] -- (missing variable, list of available variables)
+  | MatchLocalNotResolved String [String] -- (missing variable, list of available variables)
+  | NotImplementedYet String
+  deriving (Show)
 
 data BCError
  = DuplicateFunctionName String
@@ -291,6 +294,11 @@ compileFn moduleName fnNames (_, params, blk) =
             Nothing -> throwError $ ICE $ LocalNotResolved name (scope^._locals)
         compileExpr _ (NameExpr (Namespaced ns name)) =
           appendInstr $ LoadName (UnresolvedModuleName ns) name
+        compileExpr scope (InstantiateExpr (ResolvedVariant mn adt ctor _) fields) = do
+          -- asc sort
+          for_ (sortBy (comparing instantiateFieldName) fields) $ \(InstantiateField _ fieldExpr) -> do
+            compileExpr scope fieldExpr
+          appendInstr $ Instantiate (UnresolvedModuleName mn) adt ctor
         compileExpr scope (MatchExpr topic bs) = do
           failLabel <- generateLabel
           endLabel <- generateLabel
@@ -315,7 +323,7 @@ compileFn moduleName fnNames (_, params, blk) =
 
         compilePattern :: Scope -> RegisterIdx -> LabelIdx -> MatchSubject 'R -> BuilderState ()
         compilePattern scope reg nextBranch = \case
-          MatchSubjectConstructor (ResolvedVariant mn e c) vars -> do
+          MatchSubjectConstructor (ResolvedVariant mn e c _) vars -> do
             appendInstr $ LoadRegister reg
             appendInstr $ IsVariant (UnresolvedModuleName mn) e c
             appendInstr $ jumpUnless nextBranch

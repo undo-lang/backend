@@ -14,6 +14,7 @@ import qualified Data.Map as Map
 import Control.Monad.State (StateT(..), evalStateT)
 import Control.Lens
 import Data.Kind (Type)
+import qualified Data.Set as Set
 
 import AST
 
@@ -27,6 +28,7 @@ data ScopeError
   | DuplicateEnumVariant String
   | NoSuchVariant String
   -- TODO duplicate enum variant
+  | InvalidVariantFields (Set.Set String) (Set.Set String) -- got, expected
   deriving (Show)
 
 type Aliases = Map.Map String ModuleName -- TODO implement those everywhere else
@@ -37,7 +39,7 @@ data Scope = Scope
     _scopeNamespaces :: [ModuleName],
     __scopeAliases :: Aliases,
     _scopeEnums :: Map.Map String EnumVariants,
-    _scopeVariants :: Map.Map String (ModuleName, String) } -- Variant Name -> Module+ctor
+    _scopeVariants :: Map.Map String (ModuleName, String, Set.Set String) } -- Variant Name -> Module+ctor+fields
 
 $(makeLenses ''Scope)
 
@@ -55,7 +57,7 @@ addNamespace = (scopeNamespaces <>~) . pure
 
 addEnum :: (String, [EnumVariant]) -> Scope -> Scope
 addEnum (name, variants) scope =
-    foldl (\s (EnumVariant v _) -> scopeVariants.at v ?~ (ModuleName [], name) $ s)
+    foldl (\s (EnumVariant v fields) -> scopeVariants.at v ?~ (ModuleName [], name, Set.fromList fields) $ s)
         (scopeEnums.at name ?~ Map.fromList (variantize <$> variants) $ scope) variants
   where variantize (EnumVariant n xs) = (n, length xs)
 
@@ -128,6 +130,18 @@ resolveTree scope (Block lines) = Block <$> mapAccumM_ resolveLine hoistedScope 
         resolveExpr scope (MatchExpr topic bs) =
           MatchExpr <$> resolveExpr scope topic <*> traverse (resolveMatchBranch scope) bs
 
+        resolveExpr scope (InstantiateExpr vn fields) =
+          resolveVariantName scope vn >>= \variant -> do
+            let ResolvedVariant _ _ _ expectedFields = variant
+                gotFields = Set.fromList $ instantiateFieldName <$> fields
+            if gotFields /= expectedFields
+            then Left $ InvalidVariantFields gotFields expectedFields
+            else InstantiateExpr variant <$> traverse (resolveInstantiateField scope) fields
+
+        resolveInstantiateField :: Resolver InstantiateField
+        resolveInstantiateField scope (InstantiateField name expr) =
+          InstantiateField name <$> resolveExpr scope expr
+
         resolveMatchBranch :: Resolver MatchBranch
         resolveMatchBranch scope (MatchBranch s b) = do
           let names = matchNames s
@@ -143,7 +157,7 @@ resolveTree scope (Block lines) = Block <$> mapAccumM_ resolveLine hoistedScope 
         resolveVariantName :: Resolver VariantName
         resolveVariantName scope (UnqualifiedVariant v) =
           case scope^.scopeVariants.at v of
-            Just (mn, ctor) -> Right $ ResolvedVariant mn ctor v
+            Just (mn, ctor, fields) -> Right $ ResolvedVariant mn ctor v fields
             Nothing -> Left $ NoSuchVariant v
 
         resolveName :: Resolver Name

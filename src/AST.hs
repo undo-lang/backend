@@ -19,6 +19,7 @@ import Control.Lens.Prism (prism', Prism')
 import Control.Lens.Wrapped (Wrapped)
 import Control.Lens.Plated (Plated(..))
 import Control.Lens.Type (Traversal') -- TMP
+import qualified Data.Set as Set
 
 newtype ModuleName = ModuleName [String]
   deriving (Generic, FromJSON, ToJSON, Eq, Show)
@@ -53,7 +54,7 @@ instance FromJSON (Name 'U) where
 data VariantName :: NameStage -> Type where
   -- TODO Namespaced etc?
   UnqualifiedVariant :: String -> VariantName 'U
-  ResolvedVariant :: ModuleName -> String -> String -> VariantName 'R
+  ResolvedVariant :: ModuleName -> String -> String -> Set.Set String -> VariantName 'R
 deriving instance Show (VariantName s)
 deriving instance Eq (VariantName s)
 
@@ -89,6 +90,16 @@ instance FromJSON (MatchBranch 'U) where
   parseJSON = withObject "match branch" $ \o -> do
     MatchBranch <$> o .: "subject" <*> o .: "block"
 
+data InstantiateField s = InstantiateField String (Expr s)
+    deriving (Eq, Show)
+
+instantiateFieldName :: InstantiateField s -> String
+instantiateFieldName (InstantiateField n _) = n
+
+instance FromJSON (InstantiateField 'U) where
+  parseJSON = withObject "instantiate field" $ \o -> do
+    InstantiateField <$> o .: "field" <*> o .: "value"
+
 data Expr s where
   LitStr :: String -> Expr s
   LitNum :: Int -> Expr s
@@ -97,6 +108,7 @@ data Expr s where
   ConditionalExpr :: Expr s -> Block s -> Block s -> Expr s
   NameExpr :: Name s -> Expr s
   MatchExpr :: Expr s -> [MatchBranch s] -> Expr s
+  InstantiateExpr :: VariantName s -> [InstantiateField s] -> Expr s
 deriving instance Show (Expr s)
 deriving instance Eq (Expr s)
 
@@ -118,11 +130,12 @@ instance FromJSON (Expr 'U) where
     do
       type_ <- o .: "type"
       case type_ of
-        "String" -> LitStr <$> o .: "value"
-        "Num"    -> LitNum <$> o .: "value"
-        "Call"   -> CallExpr <$> o .: "fn" <*> o .: "argument"
+        "String"      -> LitStr <$> o .: "value"
+        "Num"         -> LitNum <$> o .: "value"
+        "Call"        -> CallExpr <$> o .: "fn" <*> o .: "argument"
         "Conditional" -> ConditionalExpr <$> o .: "condition" <*> o .: "then" <*> o .: "else"
-        "Match" -> MatchExpr <$> o .: "topic" <*> o .: "branch"
+        "Match"       -> MatchExpr <$> o .: "topic" <*> o .: "branch"
+        "Instantiate" -> InstantiateExpr <$> o .: "name" <*> o .: "field"
         _        -> fail $ "Unknown expr type: " ++ type_
     ]
 
