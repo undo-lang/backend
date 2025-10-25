@@ -20,6 +20,7 @@ import Control.Lens.Wrapped (Wrapped)
 import Control.Lens.Plated (Plated(..))
 import Control.Lens.Type (Traversal') -- TMP
 import qualified Data.Set as Set
+import qualified Data.Map as Map
 
 newtype ModuleName = ModuleName [String]
   deriving (Generic, FromJSON, ToJSON, Eq, Show)
@@ -66,7 +67,7 @@ instance FromJSON (VariantName 'U) where
       _             -> fail $ "Unhandled variant name type: " ++ type_
 
 data MatchSubject s
-  = MatchSubjectConstructor (VariantName s) [(String, MatchSubject s)]
+  = MatchSubjectConstructor (VariantName s) (Map.Map String (MatchSubject s))
   | MatchSubjectVariable String
   deriving (Eq, Show)
 
@@ -80,7 +81,7 @@ instance FromJSON (MatchSubject 'U) where
 
 -- TODO refactor this to use Plated
 matchNames :: MatchSubject s -> [String]
-matchNames (MatchSubjectConstructor _ subs) = subs >>= matchNames . snd
+matchNames (MatchSubjectConstructor _ subs) = Map.elems subs >>= matchNames
 matchNames (MatchSubjectVariable v) = [v]
 
 data MatchBranch s = MatchBranch (MatchSubject s) (Block s)

@@ -18,8 +18,14 @@
   "functions": {
     "MAIN": [
       {
-        "contents": "TODO instantiate",
+        "contents": "hello",
         "tag": "PushString"
+      },
+      {
+        "contents": {
+
+        },
+        "tag": "Instantiate"
       },
       {
         "contents": 0,
@@ -40,7 +46,7 @@
         "tag": "IsVariant"
       },
       {
-        "contents": 14,
+        "contents": 15,
         "tag": "JumpUnless"
       },
       {
@@ -90,7 +96,7 @@
         "tag": "Call"
       },
       {
-        "contents": 14,
+        "contents": 15,
         "tag": "Jump"
       }
     ]

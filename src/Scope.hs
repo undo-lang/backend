@@ -150,7 +150,7 @@ resolveTree scope (Block lines) = Block <$> mapAccumM_ resolveLine hoistedScope 
 
         resolveMatchSubject :: Resolver MatchSubject
         resolveMatchSubject scope (MatchSubjectConstructor n subs) =
-          MatchSubjectConstructor <$> resolveVariantName scope n <*> traverse (traverse (resolveMatchSubject scope)) subs
+          MatchSubjectConstructor <$> resolveVariantName scope n <*> traverse (resolveMatchSubject scope) subs
         resolveMatchSubject _ (MatchSubjectVariable s) =
           pure $ MatchSubjectVariable s
 

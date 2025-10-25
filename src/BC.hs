@@ -327,7 +327,7 @@ compileFn moduleName fnNames (_, params, blk) =
             appendInstr $ LoadRegister reg
             appendInstr $ IsVariant (UnresolvedModuleName mn) e c
             appendInstr $ jumpUnless nextBranch
-            for_ vars $ \(fieldName, var) -> do
+            for_ (Map.toList vars) $ \(fieldName, var) -> do
               appendInstr $ LoadRegister reg
               appendInstr $ Field (UnresolvedModuleName mn) e c fieldName
               fieldReg <- registerSave
