@@ -133,14 +133,10 @@ resolveTree scope (Block lines) = Block <$> mapAccumM_ resolveLine hoistedScope 
         resolveExpr scope (InstantiateExpr vn fields) =
           resolveVariantName scope vn >>= \variant -> do
             let ResolvedVariant _ _ _ expectedFields = variant
-                gotFields = Set.fromList $ instantiateFieldName <$> fields
+                gotFields = Set.fromList $ Map.keys fields
             if gotFields /= expectedFields
             then Left $ InvalidVariantFields gotFields expectedFields
-            else InstantiateExpr variant <$> traverse (resolveInstantiateField scope) fields
-
-        resolveInstantiateField :: Resolver InstantiateField
-        resolveInstantiateField scope (InstantiateField name expr) =
-          InstantiateField name <$> resolveExpr scope expr
+            else InstantiateExpr variant <$> traverse (resolveExpr scope) fields
 
         resolveMatchBranch :: Resolver MatchBranch
         resolveMatchBranch scope (MatchBranch s b) = do

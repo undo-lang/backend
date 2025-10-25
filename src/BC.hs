@@ -35,9 +35,8 @@ import Control.Monad.Except (ExceptT, runExceptT, MonadError (throwError))
 --import Data.Functor (($>))
 import Data.Aeson
 import Control.Monad.State
-import Data.List (elemIndex)
 import Data.Kind (Type)
-import Data.List (sortBy)
+import Data.List (elemIndex, sortBy)
 import Data.Ord (comparing)
 import qualified Data.Map as Map
 
@@ -296,7 +295,7 @@ compileFn moduleName fnNames (_, params, blk) =
           appendInstr $ LoadName (UnresolvedModuleName ns) name
         compileExpr scope (InstantiateExpr (ResolvedVariant mn adt ctor _) fields) = do
           -- asc sort
-          for_ (sortBy (comparing instantiateFieldName) fields) $ \(InstantiateField _ fieldExpr) -> do
+          for_ (sortBy (comparing fst) $ Map.toList fields) $ \(_, fieldExpr) -> do
             compileExpr scope fieldExpr
           appendInstr $ Instantiate (UnresolvedModuleName mn) adt ctor
         compileExpr scope (MatchExpr topic bs) = do

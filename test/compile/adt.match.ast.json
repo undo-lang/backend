@@ -20,8 +20,17 @@
     {
       "type": "Match",
       "topic": {
-        "type": "String",
-        "value": "TODO instantiate"
+        "type": "Instantiate",
+        "name": {
+          "type": "Unqualified",
+          "name": "Just"
+        },
+        "field": {
+          "value": {
+            "type": "String",
+            "value": "hello"
+          }
+        }
       },
       "branch": [
         {
@@ -31,15 +40,12 @@
               "type": "Unqualified",
               "name": "Just"
             },
-            "sub": [
-              [
-                "value",
-                {
-                  "type": "Variable",
-                  "name": "x"
-                }
-              ]
-            ]
+            "sub": {
+              "value": {
+                "type": "Variable",
+                "name": "x"
+              }
+            }
           },
           "block": {
             "type": "Block",

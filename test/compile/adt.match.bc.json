@@ -22,9 +22,16 @@
         "tag": "PushString"
       },
       {
-        "contents": {
-
-        },
+        "contents": [
+          {
+            "module": [
+              "adt",
+              "match"
+            ]
+          },
+          "Option",
+          "Just"
+        ],
         "tag": "Instantiate"
       },
       {

@@ -91,16 +91,6 @@ instance FromJSON (MatchBranch 'U) where
   parseJSON = withObject "match branch" $ \o -> do
     MatchBranch <$> o .: "subject" <*> o .: "block"
 
-data InstantiateField s = InstantiateField String (Expr s)
-    deriving (Eq, Show)
-
-instantiateFieldName :: InstantiateField s -> String
-instantiateFieldName (InstantiateField n _) = n
-
-instance FromJSON (InstantiateField 'U) where
-  parseJSON = withObject "instantiate field" $ \o -> do
-    InstantiateField <$> o .: "field" <*> o .: "value"
-
 data Expr s where
   LitStr :: String -> Expr s
   LitNum :: Int -> Expr s
@@ -109,7 +99,7 @@ data Expr s where
   ConditionalExpr :: Expr s -> Block s -> Block s -> Expr s
   NameExpr :: Name s -> Expr s
   MatchExpr :: Expr s -> [MatchBranch s] -> Expr s
-  InstantiateExpr :: VariantName s -> [InstantiateField s] -> Expr s
+  InstantiateExpr :: VariantName s -> Map.Map String (Expr s) -> Expr s
 deriving instance Show (Expr s)
 deriving instance Eq (Expr s)
 
