@@ -33,7 +33,7 @@ for @specs -> % (:$name, :$is-error, :$disabled) {
       my %expected-bc = from-json(slurp $bc-file);
       is-deeply %generated, %expected-bc, "Correct BC generated for $name";
     } else {
-      fail "Expected to succeed, but errored instead: $error";
+      flunk "Expected to succeed, but errored instead: $error";
     }
   }
 }
