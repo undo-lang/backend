@@ -98,6 +98,7 @@ data Expr s where
   LoopExpr :: Expr s -> Block s -> Expr s
   ConditionalExpr :: Expr s -> Block s -> Block s -> Expr s
   NameExpr :: Name s -> Expr s
+  FieldExpr :: Expr s -> String -> Expr s
   MatchExpr :: Expr s -> [MatchBranch s] -> Expr s
   InstantiateExpr :: VariantName s -> Map.Map String (Expr s) -> Expr s
 deriving instance Show (Expr s)
@@ -125,6 +126,7 @@ instance FromJSON (Expr 'U) where
         "Num"         -> LitNum <$> o .: "value"
         "Call"        -> CallExpr <$> o .: "fn" <*> o .: "argument"
         "Conditional" -> ConditionalExpr <$> o .: "condition" <*> o .: "then" <*> o .: "else"
+        "Field"       -> FieldExpr <$> o .: "object" <*> o .: "field"
         "Match"       -> MatchExpr <$> o .: "topic" <*> o .: "branch"
         "Instantiate" -> InstantiateExpr <$> o .: "name" <*> o .: "field"
         _        -> fail $ "Unknown expr type: " ++ type_

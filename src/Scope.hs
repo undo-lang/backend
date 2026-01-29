@@ -127,6 +127,9 @@ resolveTree scope (Block lines) = Block <$> mapAccumM_ resolveLine hoistedScope 
         resolveExpr _ (LitNum i) =
           Right $ LitNum i
 
+        resolveExpr scope (FieldExpr object field) =
+          FieldExpr <$> resolveExpr scope object <*> pure field
+
         resolveExpr scope (MatchExpr topic bs) =
           MatchExpr <$> resolveExpr scope topic <*> traverse (resolveMatchBranch scope) bs
 

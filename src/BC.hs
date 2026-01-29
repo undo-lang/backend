@@ -293,6 +293,9 @@ compileFn moduleName fnNames (_, params, blk) =
             Nothing -> throwError $ ICE $ LocalNotResolved name (scope^._locals)
         compileExpr _ (NameExpr (Namespaced ns name)) =
           appendInstr $ LoadName (UnresolvedModuleName ns) name
+        compileExpr s (FieldExpr o f) = do
+          compileExpr s o
+          appendInstr $ Field f
         compileExpr scope (InstantiateExpr (ResolvedVariant mn adt ctor _) fields) = do
           -- asc sort
           for_ (sortBy (comparing fst) $ Map.toList fields) $ \(_, fieldExpr) -> do
