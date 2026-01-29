@@ -61,14 +61,7 @@
         "tag": "LoadRegister"
       },
       {
-        "contents": [
-          {
-            "module": ["adt", "match"]
-          },
-          "Option",
-          "Just",
-          "value"
-        ],
+        "contents": "value",
         "tag": "Field"
       },
       {

@@ -93,7 +93,7 @@ data Instruction s
  | LoadName (BCModuleName s) String
  | Instantiate (BCModuleName s) String String -- Module ADT Ctor
  | IsVariant (BCModuleName s) String String -- Module ADT Ctor
- | Field (BCModuleName s) String String String -- Module ADT Ctor Field
+ | Field String
   deriving (Show, Generic)
 deriving instance ToJSON (Instruction 'O) -- ???
 
@@ -219,7 +219,7 @@ resolveBuilder moduleName builder = traverse resolve $ builder^.instrs
         resolve (StoreRegister r) = Right $ StoreRegister r
         resolve (Instantiate ns e c) = Instantiate <$> resolveModuleName ns <*> pure e <*> pure c
         resolve (IsVariant ns e c) = IsVariant <$> resolveModuleName ns <*> pure e <*> pure c
-        resolve (Field ns e c f) = Field <$> resolveModuleName ns <*> pure e <*> pure c <*> pure f
+        resolve (Field f) = Right $ Field f
 
         resolveModuleName :: BCModuleName 'L -> Either BCError (BCModuleName 'O)
         resolveModuleName CurrentModuleName = Right $ ResolvedModuleName moduleName
@@ -328,7 +328,7 @@ compileFn moduleName fnNames (_, params, blk) =
             appendInstr $ jumpUnless nextBranch
             for_ (Map.toList vars) $ \(fieldName, var) -> do
               appendInstr $ LoadRegister reg
-              appendInstr $ Field (UnresolvedModuleName mn) e c fieldName
+              appendInstr $ Field fieldName
               fieldReg <- registerSave
               compilePattern scope fieldReg nextBranch var
           MatchSubjectVariable name -> do
